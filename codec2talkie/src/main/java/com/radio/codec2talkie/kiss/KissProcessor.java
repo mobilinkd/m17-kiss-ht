@@ -21,8 +21,10 @@ public class KissProcessor {
     private final byte KISS_CMD_TX_DELAY = (byte)0x01;
     private final byte KISS_CMD_P = (byte)0x02;
     private final byte KISS_CMD_SLOT_TIME = (byte)0x03;
-    private final byte KISS_CMD_TX_TAIL = (byte)0x04;
+    private final byte KISS_CMD_DUPLEX = (byte)0x05;
     private final byte KISS_CMD_NOCMD = (byte)0x80;
+
+    private final byte KISS_MODEM_STREAMING = (byte)0x20;   // This is the streaming modem ID.
 
     private enum KissState {
         VOID,
@@ -34,10 +36,10 @@ public class KissProcessor {
     private KissState _kissState = KissState.VOID;
     private byte _kissCmd = KISS_CMD_NOCMD;
 
-    private final byte _tncCsmaPersistence;
-    private final byte _tncCsmaSlotTime;
-    private final byte _tncTxDelay;
-    private final byte _tncTxTail;
+    private final byte _tncCsmaPersistence = 0x3f;          // 63 is recommended by M17 KISS Spec.
+    private final byte _tncCsmaSlotTime = (byte) 0x04;      // Required by M17 KISS Spec.
+    private final byte _tncTxDelay;                         // This is the only real tunable.
+    private final byte _tncDuplex;                          // Controls BCL; defaults to BCL off.
 
     private final byte[] _outputKissBuffer;
     private final byte[] _inputKissBuffer;
@@ -47,17 +49,26 @@ public class KissProcessor {
     private int _outputKissBufferPos;
     private int _inputKissBufferPos;
 
-    public KissProcessor(byte csmaPersistence, byte csmaSlotTime, byte txDelay, byte txTail, KissCallback callback) {
+    public KissProcessor(KissCallback callback, byte txDelay) {
         _callback = callback;
         _outputKissBuffer = new byte[KISS_TX_FRAME_MAX_SIZE];
         _inputKissBuffer = new byte[100 * KISS_TX_FRAME_MAX_SIZE];
-        _tncCsmaPersistence = csmaPersistence;
-        _tncCsmaSlotTime = csmaSlotTime;
         _tncTxDelay = txDelay;
-        _tncTxTail = txTail;
+        _tncDuplex = 1;
         _outputKissBufferPos = 0;
         _inputKissBufferPos = 0;
     }
+
+    public KissProcessor(KissCallback callback, byte txDelay, byte duplex) {
+        _callback = callback;
+        _outputKissBuffer = new byte[KISS_TX_FRAME_MAX_SIZE];
+        _inputKissBuffer = new byte[100 * KISS_TX_FRAME_MAX_SIZE];
+        _tncTxDelay = txDelay;
+        _tncDuplex = duplex;
+        _outputKissBufferPos = 0;
+        _inputKissBufferPos = 0;
+    }
+
 
     public void initialize() throws IOException {
         startKissPacket(KISS_CMD_P);
@@ -69,11 +80,7 @@ public class KissProcessor {
         completeKissPacket();
 
         startKissPacket(KISS_CMD_TX_DELAY);
-        sendKissByte(_tncTxTail);
-        completeKissPacket();
-
-        startKissPacket(KISS_CMD_TX_TAIL);
-        sendKissByte(_tncTxTail);
+        sendKissByte(_tncTxDelay);
         completeKissPacket();
     }
 

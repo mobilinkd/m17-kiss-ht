@@ -29,7 +29,7 @@ public class UsbConnectActivity extends AppCompatActivity {
     private final int USB_NOT_FOUND = 1;
     private final int USB_CONNECTED = 2;
 
-    private final int USB_BAUD_RATE = 115200;
+    private final int USB_BAUD_RATE = 38400;
     private final int USB_DATA_BITS = 8;
     private final int USB_STOP_BITS = UsbSerialPort.STOPBITS_1;
     private final int USB_PARITY = UsbSerialPort.PARITY_NONE;
