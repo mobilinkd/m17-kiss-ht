@@ -24,7 +24,7 @@
         android:layout_marginStart="8dp"
         android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
-        android:layout_marginBottom="8dp"
+        android:layout_marginBottom="32dp"
         android:background="@drawable/btn_ptt"
         android:hapticFeedbackEnabled="false"
         android:text="@string/push_to_talk"
@@ -32,28 +32,19 @@
         android:textSize="24sp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.598"
+        app:layout_constraintHorizontal_bias="0.52"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/checkBoxLoopback" />
+        app:layout_constraintTop_toBottomOf="@+id/textViewReceiving" />
 
     <CheckBox
         android:id="@+id/checkBoxLoopback"
         android:layout_width="wrap_content"
         android:layout_height="48dp"
         android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
         android:text="codec2 loopback test"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/spinnerCodecMode" />
-
-    <Spinner
-        android:id="@+id/spinnerCodecMode"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
-        android:entries="@array/codec2_modes"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textBtName" />
+        app:layout_constraintTop_toBottomOf="@+id/textStatus" />
 
     <TextView
         android:id="@+id/textStatus"
@@ -84,5 +75,45 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <EditText
+        android:id="@+id/editTextCallSign"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:ems="10"
+        android:hint="Call Sign"
+        android:inputType="text"
+        android:singleLine="true"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/checkBoxLoopback" />
+
+    <TextView
+        android:id="@+id/textViewReceiving"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="8dp"
+        android:text="Received Callsign"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
+        app:layout_constraintEnd_toStartOf="@+id/textViewReceivedCallsign"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/editTextCallSign" />
+
+    <TextView
+        android:id="@+id/textViewReceivedCallsign"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:textAppearance="@style/TextAppearance.AppCompat.Large"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/textViewReceiving"
+        app:layout_constraintTop_toBottomOf="@+id/editTextCallSign" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

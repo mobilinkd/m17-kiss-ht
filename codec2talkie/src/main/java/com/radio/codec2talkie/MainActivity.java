@@ -20,6 +20,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.AdapterView;
@@ -41,6 +42,10 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
+import static android.os.Process.THREAD_PRIORITY_AUDIO;
+import static android.os.Process.THREAD_PRIORITY_URGENT_AUDIO;
+import static android.os.Process.setThreadPriority;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = MainActivity.class.getSimpleName();
@@ -49,7 +54,7 @@ public class MainActivity extends AppCompatActivity {
     private final static int REQUEST_CONNECT_USB = 2;
     private final static int REQUEST_PERMISSIONS = 3;
 
-    private final static int CODEC2_DEFAULT_MODE = Codec2.CODEC2_MODE_450;
+    private final static int CODEC2_DEFAULT_MODE = Codec2.CODEC2_MODE_3200;
     private final static int CODEC2_DEFAULT_MODE_POS = 0;
 
     private final String[] _requiredPermissions = new String[] {
@@ -61,12 +66,15 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView _textConnInfo;
     private TextView _textStatus;
-    private Spinner _spinnerCodec2Mode;
     private ProgressBar _progressRxLevel;
     private ProgressBar _progressTxLevel;
     private CheckBox _checkBoxLoopback;
+    private TextView _editTextCallSign;
+    private TextView _receivedCallSign;
 
     private Codec2Player _codec2Player;
+
+    private String _callsign = "MYCALL";
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -84,12 +92,12 @@ public class MainActivity extends AppCompatActivity {
         _progressTxLevel = findViewById(R.id.progressTxLevel);
         _progressTxLevel.setMax(-Codec2Player.getAudioMinLevel());
 
+        _editTextCallSign = findViewById(R.id.editTextCallSign);
+        _editTextCallSign.setOnEditorActionListener(onCallsignChanged);
+        _receivedCallSign = findViewById(R.id.textViewReceivedCallsign);
+
         Button btnPtt = findViewById(R.id.btnPtt);
         btnPtt.setOnTouchListener(onBtnPttTouchListener);
-
-        _spinnerCodec2Mode = findViewById(R.id.spinnerCodecMode);
-        _spinnerCodec2Mode.setSelection(CODEC2_DEFAULT_MODE_POS);
-        _spinnerCodec2Mode.setOnItemSelectedListener(onCodecModeSelectedListener);
 
         _checkBoxLoopback = findViewById(R.id.checkBoxLoopback);
         _checkBoxLoopback.setOnCheckedChangeListener(onLoopbackCheckedChangeListener);
@@ -119,6 +127,7 @@ public class MainActivity extends AppCompatActivity {
     protected void startBluetoothConnectActivity() {
         Intent bluetoothConnectIntent = new Intent(this, BluetoothConnectActivity.class);
         startActivityForResult(bluetoothConnectIntent, REQUEST_CONNECT_BT);
+        setThreadPriority(THREAD_PRIORITY_URGENT_AUDIO);
     }
 
     protected boolean requestPermissions() {
@@ -157,18 +166,11 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
-    private final AdapterView.OnItemSelectedListener onCodecModeSelectedListener = new AdapterView.OnItemSelectedListener() {
+    private final TextView.OnEditorActionListener onCallsignChanged = new TextView.OnEditorActionListener() {
         @Override
-        public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-            String selectedCodec = getResources().getStringArray(R.array.codec2_modes)[position];
-            String [] codecNameCodecId = selectedCodec.split("=");
-            if (_codec2Player != null) {
-                _codec2Player.setCodecMode(Integer.parseInt(codecNameCodecId[1]));
-            }
-        }
-
-        @Override
-        public void onNothingSelected(AdapterView<?> parent) {
+        public boolean onEditorAction(TextView textView, int i, KeyEvent keyEvent) {
+            _callsign = textView.getText().toString();
+            return true;
         }
     };
 
@@ -197,7 +199,7 @@ public class MainActivity extends AppCompatActivity {
         public boolean onTouch(View v, MotionEvent event) {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
-                    if (_codec2Player != null)
+                    if (_codec2Player != null && _callsign != null)
                         _codec2Player.startRecording();
                     break;
                 case MotionEvent.ACTION_UP:
@@ -257,17 +259,20 @@ public class MainActivity extends AppCompatActivity {
                 _progressTxLevel.getProgressDrawable().setColorFilter(new PorterDuffColorFilter(colorFromAudioLevel(msg.arg1), PorterDuff.Mode.SRC_IN));
                 _progressTxLevel.setProgress(msg.arg1 - Codec2Player.getAudioMinLevel());
             }
+            else if (msg.what == Codec2Player.PLAYER_CALLSIGN_RECEIVED) {
+                String callsign = (String) msg.obj;
+                _receivedCallSign.setText(callsign);
+            }
         }
     };
 
     private void startPlayer(boolean isUsb) throws IOException {
-        _codec2Player = new Codec2Player(onPlayerStateChanged, CODEC2_DEFAULT_MODE);
+        _codec2Player = new Codec2Player(onPlayerStateChanged, CODEC2_DEFAULT_MODE, _callsign);
         if (isUsb) {
             _codec2Player.setUsbPort(UsbPortHandler.getPort());
         } else {
             _codec2Player.setSocket(SocketHandler.getSocket());
         }
-        _spinnerCodec2Mode.setSelection(CODEC2_DEFAULT_MODE_POS);
         _codec2Player.start();
     }
 

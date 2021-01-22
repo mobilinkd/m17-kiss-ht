@@ -2,6 +2,7 @@ package com.radio.codec2talkie.kiss;
 
 import android.util.Log;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -17,7 +18,7 @@ public class KissProcessor {
     private final byte KISS_TFEND = (byte)0xdc;
     private final byte KISS_TFESC = (byte)0xdd;
 
-    private final byte KISS_CMD_DATA = (byte)0x00;
+    private final byte KISS_CMD_DATA = (byte)0x20;
     private final byte KISS_CMD_TX_DELAY = (byte)0x01;
     private final byte KISS_CMD_P = (byte)0x02;
     private final byte KISS_CMD_SLOT_TIME = (byte)0x03;
@@ -71,6 +72,7 @@ public class KissProcessor {
 
 
     public void initialize() throws IOException {
+/*
         startKissPacket(KISS_CMD_P);
         sendKissByte(_tncCsmaPersistence);
         completeKissPacket();
@@ -82,25 +84,16 @@ public class KissProcessor {
         startKissPacket(KISS_CMD_TX_DELAY);
         sendKissByte(_tncTxDelay);
         completeKissPacket();
+*/
     }
 
     public void send(byte [] frame) throws IOException {
-        ByteBuffer escapedFrame = escape(frame);
-        int escapedFrameSize = escapedFrame.position();
-        escapedFrame.rewind();
-
-        if (_outputKissBufferPos == 0) {
-            startKissPacket(KISS_CMD_DATA);
-        }
-        // new frame does not fit, complete and create new frame
-        if ( _outputKissBufferPos + escapedFrameSize >= KISS_TX_FRAME_MAX_SIZE) {
-            completeKissPacket();
-            startKissPacket(KISS_CMD_DATA);
-        }
-        // write new data
-        while (escapedFrame.position() < escapedFrameSize) {
-            sendKissByte(escapedFrame.get());
-        }
+        ByteArrayOutputStream output = new ByteArrayOutputStream(frame.length * 2);
+        output.write(KISS_FEND);
+        output.write(KISS_CMD_DATA);
+        escape(frame, output);
+        output.write(KISS_FEND);
+        _callback.onSend(output.toByteArray());
     }
 
     public void receive(byte[] data) {
@@ -184,21 +177,21 @@ public class KissProcessor {
         }
     }
 
-    private ByteBuffer escape(byte [] inputBuffer) {
-        ByteBuffer escapedBuffer = ByteBuffer.allocate(4 * inputBuffer.length);
+    private void escape(byte[] inputBuffer, ByteArrayOutputStream output) {
         for (byte b : inputBuffer) {
             switch (b) {
                 case KISS_FEND:
-                    escapedBuffer.put(KISS_FESC).put(KISS_TFEND);
+                    output.write(KISS_FESC);
+                    output.write(KISS_TFEND);
                     break;
                 case KISS_FESC:
-                    escapedBuffer.put(KISS_FESC).put(KISS_TFESC);
+                    output.write(KISS_FESC);
+                    output.write(KISS_TFESC);
                     break;
                 default:
-                    escapedBuffer.put(b);
+                    output.write(b);
                     break;
             }
         }
-        return escapedBuffer;
     }
 }

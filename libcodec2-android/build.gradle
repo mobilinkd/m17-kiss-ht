@@ -48,7 +48,7 @@ android {
     }
     sourceSets {
         main {
-            jniLibs.srcDirs = ['build/imported-lib']
+            // jniLibs.srcDirs = ['build/imported-lib']
         }
     }
 }

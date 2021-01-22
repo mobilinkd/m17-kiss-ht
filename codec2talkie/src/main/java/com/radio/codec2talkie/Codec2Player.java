@@ -1,12 +1,6 @@
 package com.radio.codec2talkie;
 
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
@@ -23,11 +17,19 @@ import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.concurrent.LinkedTransferQueue;
 
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.radio.codec2talkie.kiss.KissCallback;
 import com.radio.codec2talkie.kiss.KissProcessor;
+import com.radio.codec2talkie.m17.M17Callback;
+import com.radio.codec2talkie.m17.M17Processor;
 import com.ustadmobile.codec2.Codec2;
+
+import static android.os.Process.THREAD_PRIORITY_AUDIO;
+import static android.os.Process.setThreadPriority;
 
 public class Codec2Player extends Thread {
 
@@ -39,21 +41,19 @@ public class Codec2Player extends Thread {
     public static int PLAYER_PLAYING = 4;
     public static int PLAYER_RX_LEVEL = 5;
     public static int PLAYER_TX_LEVEL = 6;
+    public static int PLAYER_CALLSIGN_RECEIVED = 7;
 
     private static int AUDIO_MIN_LEVEL = -70;
     private static int AUDIO_HIGH_LEVEL = -15;
 
-    private final int AUDIO_SAMPLE_SIZE = 8000;
+    private final int AUDIO_SAMPLE_RATE = 8000;
     private final int SLEEP_IDLE_DELAY_MS = 20;
-    private final int POST_PLAY_DELAY_MS = 1000;
+    private final int POST_PLAY_DELAY_MS = 400;
 
     private final int RX_TIMEOUT = 100;
     private final int TX_TIMEOUT = 2000;
 
-    private final byte CSMA_PERSISTENCE = (byte)0xff;
-    private final byte CSMA_SLOT_TIME = (byte)0x00;
-    private final byte TX_DELAY_10MS_UNITS = (byte)(250 / 10);
-    private final byte TX_TAIL_10MS_UNITS = (byte)(500 / 10);
+    private final byte TX_DELAY_10MS_UNITS = (byte)8;
 
     private final int RX_BUFFER_SIZE = 8192;
 
@@ -90,30 +90,34 @@ public class Codec2Player extends Thread {
     private ByteBuffer _loopbackBuffer;
 
     // callbacks
+    private M17Processor _m17Processor;
     private KissProcessor _kissProcessor;
     private final Handler _onPlayerStateChanged;
 
-    public Codec2Player(Handler onPlayerStateChanged, int codec2Mode) {
+    private String _callsign;
+
+    public Codec2Player(Handler onPlayerStateChanged, int codec2Mode, String callsign) {
         _onPlayerStateChanged = onPlayerStateChanged;
         _isLoopbackMode = false;
         _rxDataBuffer = new byte[RX_BUFFER_SIZE];
+        _callsign = callsign;
 
         setCodecModeInternal(codec2Mode);
 
         int _audioRecorderMinBufferSize = AudioRecord.getMinBufferSize(
-                AUDIO_SAMPLE_SIZE,
+                AUDIO_SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT);
         _audioRecorder = new AudioRecord(
                 MediaRecorder.AudioSource.MIC,
-                AUDIO_SAMPLE_SIZE,
+                AUDIO_SAMPLE_RATE,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
-                10 * _audioRecorderMinBufferSize);
+                Math.max(_audioRecorderMinBufferSize * 5, 320));
         _audioRecorder.startRecording();
 
         int _audioPlayerMinBufferSize = AudioTrack.getMinBufferSize(
-                AUDIO_SAMPLE_SIZE,
+                AUDIO_SAMPLE_RATE,
                 AudioFormat.CHANNEL_OUT_MONO,
                 AudioFormat.ENCODING_PCM_16BIT);
         _audioPlayer = new AudioTrack.Builder()
@@ -123,7 +127,7 @@ public class Codec2Player extends Thread {
                         .build())
                 .setAudioFormat(new AudioFormat.Builder()
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(AUDIO_SAMPLE_SIZE)
+                        .setSampleRate(AUDIO_SAMPLE_RATE)
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .build())
                 .setTransferMode(AudioTrack.MODE_STREAM)
@@ -184,9 +188,72 @@ public class Codec2Player extends Thread {
 
         _loopbackBuffer = ByteBuffer.allocateDirect(1024 * _audioEncodedBufferSize);
 
-        _kissProcessor = new KissProcessor(CSMA_PERSISTENCE, CSMA_SLOT_TIME,
-                TX_DELAY_10MS_UNITS, TX_TAIL_10MS_UNITS, _kissCallback);
+        _m17Processor = new M17Processor(_m17Callback, _callsign);
+        _kissProcessor = new KissProcessor(_kissCallback, TX_DELAY_10MS_UNITS);
     }
+
+    private final M17Callback _m17Callback = new M17Callback() {
+        Timer timer = null;
+        LinkedTransferQueue<byte[]> queue = new LinkedTransferQueue<byte[]>();
+        boolean timer_active = false;
+        boolean primed = false;
+
+        @Override
+        protected void onSend(byte[] data) throws IOException {
+            synchronized (queue) {
+                if (!timer_active) {
+                    primed = false;
+                    timer = new Timer();
+                    TimerTask task = new TimerTask() {
+                        @Override
+                        public void run() {
+                            int count = 1;
+                            if (!primed) {
+                                count = 7;
+                                primed = true;
+                            }
+                            for (int i = 0; i != count; ++i) {
+                                byte[] data = queue.poll();
+                                if (data == null) {
+                                    Log.d("M17Callback", String.format("queue empty; cancelled."));
+                                    timer.cancel();
+                                    timer_active = false;
+                                } else {
+                                    try {
+                                        _kissProcessor.send(data);
+//                                    Log.d("M17Callback", String.format("Sent %d bytes", data.length));
+                                    } catch (IOException ex) {
+                                        Log.e("M17Callback", "Exception " + ex.toString());
+                                    }
+                                }
+                            }
+                        }
+                    };
+
+                    timer_active = true;
+                    timer.schedule(task, 400, 40);
+                }
+            }
+            queue.add(data);
+        }
+
+        @Override
+        protected void onReceiveAudio(byte[] data) {
+            // split by audio frame and play
+            byte [] audioFrame = new byte[_audioEncodedBufferSize];
+            for (int i = 0; i < data.length; i += _audioEncodedBufferSize) {
+                for (int j = 0; j < _audioEncodedBufferSize && (j + i) < data.length; j++)
+                    audioFrame[j] = data[i + j];
+                decodeAndPlayAudio(audioFrame);
+            }
+        }
+
+        @Override
+        protected void onReceiveLinkSetup(String callsign) {
+            _onPlayerStateChanged.obtainMessage(PLAYER_CALLSIGN_RECEIVED, 0, 0, callsign).sendToTarget();
+        }
+
+    };
 
     private final KissCallback _kissCallback = new KissCallback() {
         @Override
@@ -196,13 +263,7 @@ public class Codec2Player extends Thread {
 
         @Override
         protected void onReceive(byte[] data) {
-            // split by audio frame and play
-            byte [] audioFrame = new byte[_audioEncodedBufferSize];
-            for (int i = 0; i < data.length; i += _audioEncodedBufferSize) {
-                for (int j = 0; j < _audioEncodedBufferSize && (j + i) < data.length; j++)
-                    audioFrame[j] = data[i + j];
-                decodeAndPlayAudio(audioFrame);
-            }
+            _m17Processor.receive(data);
         }
     };
 
@@ -214,9 +275,10 @@ public class Codec2Player extends Thread {
                 e.printStackTrace();
             }
         } else {
-            if (_btOutputStream != null)
+            if (_btOutputStream != null) {
                 _btOutputStream.write(data);
-            else if (_usbPort != null) {
+                _btOutputStream.flush();
+            } else if (_usbPort != null) {
                 _usbPort.write(data, TX_TIMEOUT);
             }
         }
@@ -259,17 +321,26 @@ public class Codec2Player extends Thread {
     }
 
     private void recordAudio() throws IOException {
+        boolean sendLSF = _currentStatus != PLAYER_RECORDING;
         setStatus(PLAYER_RECORDING, 0);
         notifyAudioLevel(_recordAudioBuffer, true);
+
+        char[] temp = new char[16];
+
         _audioRecorder.read(_recordAudioBuffer, 0, _audioBufferSize);
         Codec2.encode(_codec2Con, _recordAudioBuffer, _recordAudioEncodedBuffer);
+        System.arraycopy(_recordAudioEncodedBuffer, 0, temp, 0, _audioEncodedBufferSize);
 
-        byte [] frame = new byte[_recordAudioEncodedBuffer.length];
+        _audioRecorder.read(_recordAudioBuffer, 0, _audioBufferSize);
+        Codec2.encode(_codec2Con, _recordAudioBuffer, _recordAudioEncodedBuffer);
+        System.arraycopy(_recordAudioEncodedBuffer, 0, temp, _audioEncodedBufferSize, _audioEncodedBufferSize);
 
-        for (int i = 0; i < _recordAudioEncodedBuffer.length; i++) {
-            frame[i] = (byte)_recordAudioEncodedBuffer[i];
-        }
-        _kissProcessor.send(frame);
+        byte[] frame = new byte[16];
+        for (int i = 0; i != frame.length; i++) frame[i] = (byte) temp[i];
+
+        if (sendLSF) _m17Processor.startTransmit();
+
+        _m17Processor.send(frame);
     }
 
     private boolean playAudio() throws IOException {
@@ -302,6 +373,7 @@ public class Codec2Player extends Thread {
     }
 
     private void togglePlayback() throws IOException {
+        _m17Processor.stopTransmit();
         _audioRecorder.stop();
         _audioPlayer.play();
         _kissProcessor.flush();
@@ -362,7 +434,7 @@ public class Codec2Player extends Thread {
 
     @Override
     public void run() {
-        setPriority(Thread.MAX_PRIORITY);
+        setThreadPriority(THREAD_PRIORITY_AUDIO);
         try {
             setStatus(PLAYER_LISTENING, 0);
             if (!_isLoopbackMode) {

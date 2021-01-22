@@ -1,14 +1,5 @@
 <resources>
     <string name="app_name">Codec2 Walkie Talkie</string>
-    <string name="push_to_talk">push-to-talk</string>
-    <string-array name="codec2_modes">
-        <item>MODE_450=10</item>
-        <item>MODE_700C=8</item>
-        <item>MODE_1200=5</item>
-        <item>MODE_1300=4</item>
-        <item>MODE_1400=3</item>
-        <item>MODE_1600=2</item>
-        <item>MODE_2400=1</item>
-        <item>MODE_3200=0</item>
-    </string-array>
+    <string name="push_to_talk">Transmit</string>
+    <string name="call_sign_hint">Call Sign</string>
 </resources>
