@@ -21,12 +21,12 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.LinkedTransferQueue;
 
-import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.radio.codec2talkie.kiss.KissCallback;
 import com.radio.codec2talkie.kiss.KissProcessor;
 import com.radio.codec2talkie.m17.M17Callback;
 import com.radio.codec2talkie.m17.M17Processor;
 import com.ustadmobile.codec2.Codec2;
+import com.felhr.usbserial.UsbSerialDevice;
 
 import static android.os.Process.THREAD_PRIORITY_AUDIO;
 import static android.os.Process.setThreadPriority;
@@ -60,7 +60,7 @@ public class Codec2Player extends Thread {
     private long _codec2Con;
 
     private BluetoothSocket _btSocket;
-    private UsbSerialPort _usbPort;
+    private UsbSerialDevice _usbPort;
 
     private int _audioBufferSize;
     private int _audioEncodedBufferSize;
@@ -142,7 +142,7 @@ public class Codec2Player extends Thread {
         _btOutputStream = _btSocket.getOutputStream();
     }
 
-    public void setUsbPort(UsbSerialPort port) {
+    public void setUsbPort(UsbSerialDevice port) {
         _usbPort = port;
     }
 
@@ -153,6 +153,10 @@ public class Codec2Player extends Thread {
     public void setCodecMode(int codecMode) {
         Codec2.destroy(_codec2Con);
         setCodecModeInternal(codecMode);
+    }
+
+    public void setCallsign(String callsign) {
+        _m17Processor.setCallsign(callsign);
     }
 
     public static int getAudioMinLevel() {
@@ -279,7 +283,7 @@ public class Codec2Player extends Thread {
                 _btOutputStream.write(data);
                 _btOutputStream.flush();
             } else if (_usbPort != null) {
-                _usbPort.write(data, TX_TIMEOUT);
+                _usbPort.syncWrite(data, TX_TIMEOUT);
             }
         }
     }
@@ -355,7 +359,7 @@ public class Codec2Player extends Thread {
             }
         }
         else if (_usbPort != null) {
-            bytesRead = _usbPort.read(_rxDataBuffer, RX_TIMEOUT);
+            bytesRead = _usbPort.syncRead(_rxDataBuffer, RX_TIMEOUT);
         }
         if (bytesRead > 0) {
             setStatus(PLAYER_PLAYING, 0);
@@ -415,11 +419,8 @@ public class Codec2Player extends Thread {
             }
         }
         if (_usbPort != null) {
-            try {
-                _usbPort.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            _usbPort.close();
+            _usbPort = null;
         }
     }
 

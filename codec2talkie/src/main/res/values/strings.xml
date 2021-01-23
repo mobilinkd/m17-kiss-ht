@@ -1,5 +1,13 @@
 <resources>
-    <string name="app_name">Codec2 Walkie Talkie</string>
+    <string name="app_name">M17 HT</string>
     <string name="push_to_talk">Transmit</string>
     <string name="call_sign_hint">Call Sign</string>
+    <string name="received_call_sign">Caller</string>
+    <string name="bluetooth_label">Bluetooth</string>
+    <string name="usb_label">USB</string>
+    <string name="connect_label">Connect</string>
+    <string name="disconnect_label">Disconnect</string>
+    <string name="state_label_receive">RX</string>
+    <string name="state_label_transmit">TX</string>
+    <string name="state_label_idle">IDLE</string>
 </resources>

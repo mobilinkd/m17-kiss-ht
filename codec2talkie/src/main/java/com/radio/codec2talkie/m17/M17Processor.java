@@ -112,6 +112,16 @@ public class M17Processor {
 
     public M17Processor(M17Callback callback, String callsign) {
         mCallback = callback;
+        if (callsign == null) {
+            mEncodedCallsign = encode("");
+        } else {
+            mEncodedCallsign = encode(callsign);
+        }
+        mLinkSetupFrame = makeLinkSetupFrame();
+        makeLICH();
+    }
+
+    public void setCallsign(String callsign) {
         mEncodedCallsign = encode(callsign);
         mLinkSetupFrame = makeLinkSetupFrame();
         makeLICH();

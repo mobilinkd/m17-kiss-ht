@@ -1,15 +1,15 @@
 package com.radio.codec2talkie.usb;
 
-import com.hoho.android.usbserial.driver.UsbSerialPort;
+import com.felhr.usbserial.UsbSerialDevice;
 
 public class UsbPortHandler {
-    private static UsbSerialPort port;
+    private static UsbSerialDevice port;
 
-    public static synchronized UsbSerialPort getPort(){
+    public static synchronized UsbSerialDevice getPort(){
         return port;
     }
 
-    public static synchronized void setPort(UsbSerialPort port){
+    public static synchronized void setPort(UsbSerialDevice port){
         UsbPortHandler.port = port;
     }
 }

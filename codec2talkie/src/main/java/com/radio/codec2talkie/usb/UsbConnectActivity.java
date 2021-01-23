@@ -2,40 +2,46 @@ package com.radio.codec2talkie.usb;
 
 import android.animation.ObjectAnimator;
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.hoho.android.usbserial.driver.UsbSerialDriver;
-import com.hoho.android.usbserial.driver.UsbSerialPort;
-import com.hoho.android.usbserial.driver.UsbSerialProber;
+import com.felhr.usbserial.UsbSerialDevice;
+import com.felhr.usbserial.UsbSerialInterface;
+
 import com.radio.codec2talkie.R;
 
-import java.io.IOException;
-import java.util.List;
+import java.util.Map;
 
 public class UsbConnectActivity extends AppCompatActivity {
+
+    boolean D = true;
+    String TAG = "UsbConnectActivity";
 
     private final int USB_NOT_FOUND = 1;
     private final int USB_CONNECTED = 2;
 
     private final int USB_BAUD_RATE = 38400;
     private final int USB_DATA_BITS = 8;
-    private final int USB_STOP_BITS = UsbSerialPort.STOPBITS_1;
-    private final int USB_PARITY = UsbSerialPort.PARITY_NONE;
+    private final int USB_STOP_BITS = UsbSerialInterface.STOP_BITS_1;
+    private final int USB_PARITY = UsbSerialInterface.PARITY_NONE;
 
-    private String _usbDeviceName;
-    private UsbSerialPort _usbPort;
+    private String mDeviceName;
+    private UsbDevice mUsbDevice;
+    private UsbSerialDevice mSerialDevice;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,42 +61,45 @@ public class UsbConnectActivity extends AppCompatActivity {
         new Thread() {
             @Override
             public void run() {
+                String USB_PERM_ACTION = "org.aprsdroid.app.UsbTnc.PERM";
+
                 Message resultMsg = new Message();
 
                 UsbManager manager = (UsbManager) getSystemService(Context.USB_SERVICE);
-                List<UsbSerialDriver> availableDrivers = UsbSerialProber.getDefaultProber().findAllDrivers(manager);
-                if (availableDrivers.isEmpty()) {
+
+                Map<String, UsbDevice> deviceList = manager.getDeviceList();
+                for (Map.Entry<String, UsbDevice> entry: deviceList.entrySet()) {
+                    if (UsbSerialDevice.isSupported(entry.getValue())) {
+                        mUsbDevice = entry.getValue();
+                        mDeviceName = mUsbDevice.getProductName();
+                        break;
+                    } else {
+                        if (D) Log.i(TAG, "Unsupported USB device " + entry.getKey());
+                        return;
+                    }
+                }
+
+                if (mUsbDevice == null) {
+                    Log.e(TAG, "No supported USB device found.");
+                    return;
+                }
+
+                UsbDeviceConnection usbConnection = manager.openDevice(mUsbDevice);
+                mSerialDevice = UsbSerialDevice.createUsbSerialDevice(mUsbDevice, usbConnection);
+                if (mSerialDevice == null || !mSerialDevice.syncOpen()) {
+                    Log.e(TAG, "failed to open " + mDeviceName);
                     resultMsg.what = USB_NOT_FOUND;
                     onUsbStateChanged.sendMessage(resultMsg);
                     return;
                 }
 
-                UsbSerialDriver driver = availableDrivers.get(0);
-                UsbDeviceConnection connection = manager.openDevice(driver.getDevice());
-                if (connection == null) {
-                    resultMsg.what = USB_NOT_FOUND;
-                    onUsbStateChanged.sendMessage(resultMsg);
-                    return;
-                }
-                UsbSerialPort port = driver.getPorts().get(0);
-                if (port == null) {
-                    resultMsg.what = USB_NOT_FOUND;
-                    onUsbStateChanged.sendMessage(resultMsg);
-                    return;
-                }
-
-                try {
-                    port.open(connection);
-                    port.setParameters(USB_BAUD_RATE, USB_DATA_BITS, USB_STOP_BITS, USB_PARITY);
-                    port.setDTR(true);
-                    port.setRTS(true);
-                } catch (IOException e) {
-                    resultMsg.what = USB_NOT_FOUND;
-                    onUsbStateChanged.sendMessage(resultMsg);
-                    return;
-                }
-                _usbPort = port;
-                _usbDeviceName = port.getClass().getSimpleName().replace("SerialDriver","");
+                mSerialDevice.setBaudRate(USB_BAUD_RATE);
+                mSerialDevice.setDataBits(USB_DATA_BITS);
+                mSerialDevice.setStopBits(USB_STOP_BITS);
+                mSerialDevice.setParity(USB_PARITY);
+                mSerialDevice.setFlowControl(UsbSerialInterface.FLOW_CONTROL_OFF);
+                mSerialDevice.setDTR(true);
+                mSerialDevice.setRTS(true);
                 resultMsg.what = USB_CONNECTED;
                 onUsbStateChanged.sendMessage(resultMsg);
             }
@@ -102,13 +111,13 @@ public class UsbConnectActivity extends AppCompatActivity {
         public void handleMessage(Message msg) {
             String toastMsg;
             if (msg.what == USB_CONNECTED) {
-                UsbPortHandler.setPort(_usbPort);
+                UsbPortHandler.setPort(mSerialDevice);
 
-                toastMsg = String.format("USB connected %s", _usbDeviceName);
+                toastMsg = String.format("USB connected %s", mDeviceName);
                 Toast.makeText(getBaseContext(), toastMsg, Toast.LENGTH_SHORT).show();
 
                 Intent resultIntent = new Intent();
-                resultIntent.putExtra("name", _usbDeviceName);
+                resultIntent.putExtra("name", mDeviceName);
                 setResult(Activity.RESULT_OK, resultIntent);
             } else {
                 setResult(Activity.RESULT_CANCELED);

@@ -23,12 +23,11 @@ import android.os.Message;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.AdapterView;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.ProgressBar;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -42,7 +41,6 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
-import static android.os.Process.THREAD_PRIORITY_AUDIO;
 import static android.os.Process.THREAD_PRIORITY_URGENT_AUDIO;
 import static android.os.Process.setThreadPriority;
 
@@ -66,15 +64,14 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView _textConnInfo;
     private TextView _textStatus;
-    private ProgressBar _progressRxLevel;
-    private ProgressBar _progressTxLevel;
-    private CheckBox _checkBoxLoopback;
+    private ProgressBar _progressTxRxLevel;
     private TextView _editTextCallSign;
     private TextView _receivedCallSign;
+    private Button _transmitButton;
 
     private Codec2Player _codec2Player;
 
-    private String _callsign = "MYCALL";
+    private String _callsign = null;
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -86,21 +83,16 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         _textConnInfo = findViewById(R.id.textBtName);
-        _textStatus = findViewById(R.id.textStatus);
-        _progressRxLevel = findViewById(R.id.progressRxLevel);
-        _progressRxLevel.setMax(-Codec2Player.getAudioMinLevel());
-        _progressTxLevel = findViewById(R.id.progressTxLevel);
-        _progressTxLevel.setMax(-Codec2Player.getAudioMinLevel());
+        _textStatus = findViewById(R.id.textViewState);
+        _progressTxRxLevel = findViewById(R.id.progressTxRxLevel);
+        _progressTxRxLevel.setMax(-Codec2Player.getAudioMinLevel());
 
         _editTextCallSign = findViewById(R.id.editTextCallSign);
         _editTextCallSign.setOnEditorActionListener(onCallsignChanged);
         _receivedCallSign = findViewById(R.id.textViewReceivedCallsign);
 
-        Button btnPtt = findViewById(R.id.btnPtt);
-        btnPtt.setOnTouchListener(onBtnPttTouchListener);
-
-        _checkBoxLoopback = findViewById(R.id.checkBoxLoopback);
-        _checkBoxLoopback.setOnCheckedChangeListener(onLoopbackCheckedChangeListener);
+        _transmitButton = findViewById(R.id.buttonTransmit);
+        _transmitButton.setOnTouchListener(onBtnPttTouchListener);
 
         registerReceiver(onBluetoothDisconnected, new IntentFilter(BluetoothDevice.ACTION_ACL_DISCONNECTED));
         registerReceiver(onUsbDetached, new IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED));
@@ -168,9 +160,20 @@ public class MainActivity extends AppCompatActivity {
 
     private final TextView.OnEditorActionListener onCallsignChanged = new TextView.OnEditorActionListener() {
         @Override
-        public boolean onEditorAction(TextView textView, int i, KeyEvent keyEvent) {
-            _callsign = textView.getText().toString();
-            return true;
+        public boolean onEditorAction(TextView textView, int actionId, KeyEvent keyEvent) {
+            if (actionId == EditorInfo.IME_ACTION_DONE ||
+                    keyEvent != null &&
+                            keyEvent.getAction() == KeyEvent.ACTION_DOWN &&
+                            keyEvent.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
+                if (keyEvent == null || !keyEvent.isShiftPressed()) {
+                    _callsign = textView.getText().toString();
+                    _codec2Player.setCallsign(_callsign);
+                    _transmitButton.setEnabled(true);
+                    textView.clearFocus();
+                    return false; // hide keyboard.
+                }
+            }
+            return false;
         }
     };
 
@@ -180,6 +183,7 @@ public class MainActivity extends AppCompatActivity {
             if (_codec2Player != null && SocketHandler.getSocket() != null) {
                 Toast.makeText(MainActivity.this, "Bluetooth disconnected", Toast.LENGTH_SHORT).show();
                 _codec2Player.stopRunning();
+                _transmitButton.setEnabled(false);
             }
         }
     };
@@ -190,6 +194,7 @@ public class MainActivity extends AppCompatActivity {
             if (_codec2Player != null && UsbPortHandler.getPort() != null) {
                 Toast.makeText(MainActivity.this, "USB detached", Toast.LENGTH_SHORT).show();
                 _codec2Player.stopRunning();
+                _transmitButton.setEnabled(false);
             }
         }
     };
@@ -238,26 +243,25 @@ public class MainActivity extends AppCompatActivity {
         public void handleMessage(Message msg) {
             if (_isActive && msg.what == Codec2Player.PLAYER_DISCONNECT) {
                 _textStatus.setText("STOP");
-                _checkBoxLoopback.setChecked(false);
                 Toast.makeText(getBaseContext(), "Disconnected from modem", Toast.LENGTH_SHORT).show();
                 startUsbConnectActivity();
             }
             else if (msg.what == Codec2Player.PLAYER_LISTENING) {
-                _textStatus.setText("IDLE");
+                _textStatus.setText(R.string.state_label_idle);
             }
             else if (msg.what == Codec2Player.PLAYER_RECORDING) {
-                _textStatus.setText("TX");
+                _textStatus.setText(R.string.state_label_transmit);
             }
             else if (msg.what == Codec2Player.PLAYER_PLAYING) {
-                _textStatus.setText("RX");
+                _textStatus.setText(R.string.state_label_receive);
             }
             else if (msg.what == Codec2Player.PLAYER_RX_LEVEL) {
-                _progressRxLevel.getProgressDrawable().setColorFilter(new PorterDuffColorFilter(colorFromAudioLevel(msg.arg1), PorterDuff.Mode.SRC_IN));
-                _progressRxLevel.setProgress(msg.arg1 - Codec2Player.getAudioMinLevel());
+                _progressTxRxLevel.getProgressDrawable().setColorFilter(new PorterDuffColorFilter(colorFromAudioLevel(msg.arg1), PorterDuff.Mode.SRC_IN));
+                _progressTxRxLevel.setProgress(msg.arg1 - Codec2Player.getAudioMinLevel());
             }
             else if (msg.what == Codec2Player.PLAYER_TX_LEVEL) {
-                _progressTxLevel.getProgressDrawable().setColorFilter(new PorterDuffColorFilter(colorFromAudioLevel(msg.arg1), PorterDuff.Mode.SRC_IN));
-                _progressTxLevel.setProgress(msg.arg1 - Codec2Player.getAudioMinLevel());
+                _progressTxRxLevel.getProgressDrawable().setColorFilter(new PorterDuffColorFilter(colorFromAudioLevel(msg.arg1), PorterDuff.Mode.SRC_IN));
+                _progressTxRxLevel.setProgress(msg.arg1 - Codec2Player.getAudioMinLevel());
             }
             else if (msg.what == Codec2Player.PLAYER_CALLSIGN_RECEIVED) {
                 String callsign = (String) msg.obj;
@@ -283,6 +287,7 @@ public class MainActivity extends AppCompatActivity {
             if (resultCode == RESULT_CANCELED) {
                 finish();
             } else if (resultCode == RESULT_OK) {
+                if (_callsign != null) _transmitButton.setEnabled(true);
                 _textConnInfo.setText(data.getStringExtra("name"));
                 try {
                     startPlayer(false);
@@ -295,6 +300,7 @@ public class MainActivity extends AppCompatActivity {
             if (resultCode == RESULT_CANCELED) {
                 startBluetoothConnectActivity();
             } else if (resultCode == RESULT_OK) {
+                if (_callsign != null) _transmitButton.setEnabled(true);
                 _textConnInfo.setText(data.getStringExtra("name"));
                 try {
                     startPlayer(true);
