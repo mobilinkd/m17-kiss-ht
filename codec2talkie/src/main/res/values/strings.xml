@@ -10,4 +10,8 @@
     <string name="state_label_receive">RX</string>
     <string name="state_label_transmit">TX</string>
     <string name="state_label_idle">IDLE</string>
+    <string name="bt_not_enabled">Bluetooth not enabled. Only USB devices can be connected.</string>
+
+    <!-- Preference Keys -->
+    <string name="ble_device_key">BLE Device</string>
 </resources>

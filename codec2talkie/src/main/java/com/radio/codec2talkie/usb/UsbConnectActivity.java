@@ -75,12 +75,16 @@ public class UsbConnectActivity extends AppCompatActivity {
                         break;
                     } else {
                         if (D) Log.i(TAG, "Unsupported USB device " + entry.getKey());
+                        resultMsg.what = USB_NOT_FOUND;
+                        onUsbStateChanged.sendMessage(resultMsg);
                         return;
                     }
                 }
 
                 if (mUsbDevice == null) {
                     Log.e(TAG, "No supported USB device found.");
+                    resultMsg.what = USB_NOT_FOUND;
+                    onUsbStateChanged.sendMessage(resultMsg);
                     return;
                 }
 

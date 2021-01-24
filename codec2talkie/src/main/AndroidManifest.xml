@@ -3,7 +3,12 @@
     package="com.radio.codec2talkie">
 
     <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
+    <uses-feature android:name="android.software.companion_device_setup"/>
 
     <application
         android:allowBackup="true"
@@ -15,7 +20,7 @@
         <activity
             android:name=".usb.UsbConnectActivity"
             android:configChanges="orientation|screenSize" />
-        <activity android:name=".bluetooth.BluetoothConnectActivity"
+        <activity android:name=".bluetooth.BluetoothLEConnectActivity"
             android:configChanges="orientation|screenSize"/>
         <activity android:name=".MainActivity"
             android:configChanges="orientation|screenSize">
@@ -28,5 +33,6 @@
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
+        <service android:name=".bluetooth.BluetoothLEService" />
     </application>
 </manifest>
