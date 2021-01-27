@@ -3,8 +3,8 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/Codec2Talkie.iml" filepath="$PROJECT_DIR$/.idea/modules/Codec2Talkie.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/codec2talkie/Codec2Talkie.codec2talkie.iml" filepath="$PROJECT_DIR$/.idea/modules/codec2talkie/Codec2Talkie.codec2talkie.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/libcodec2-android/Codec2Talkie.libcodec2-android.iml" filepath="$PROJECT_DIR$/.idea/modules/libcodec2-android/Codec2Talkie.libcodec2-android.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/codec2talkie/Codec2Talkie.m17kissht.iml" filepath="$PROJECT_DIR$/.idea/modules/codec2talkie/Codec2Talkie.m17kissht.iml" />
     </modules>
   </component>
 </project>

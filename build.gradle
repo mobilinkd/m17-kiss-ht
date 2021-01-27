@@ -24,7 +24,7 @@ if(project.file("buildconfig.local.properties").exists()) {
 
 ext.ABI_FILTERS = ext.buildConfigProperties["abi.filters"]
 
-group = "com.radio.codec2"
+group = "com.mobilinkd.radio.codec2"
 version = "1.0"
 
 allprojects {

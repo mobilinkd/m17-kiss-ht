@@ -11,8 +11,8 @@
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/codec2talkie" />
             <option value="$PROJECT_DIR$/libcodec2-android" />
+            <option value="$PROJECT_DIR$/m17kissht" />
           </set>
         </option>
         <option name="resolveModulePerSourceSet" value="false" />
