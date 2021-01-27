@@ -2,9 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/Codec2Talkie.iml" filepath="$PROJECT_DIR$/.idea/modules/Codec2Talkie.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/libcodec2-android/Codec2Talkie.libcodec2-android.iml" filepath="$PROJECT_DIR$/.idea/modules/libcodec2-android/Codec2Talkie.libcodec2-android.iml" />
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/codec2talkie/Codec2Talkie.m17kissht.iml" filepath="$PROJECT_DIR$/.idea/modules/codec2talkie/Codec2Talkie.m17kissht.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/m17kissht.iml" filepath="$PROJECT_DIR$/.idea/modules/m17kissht.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.iml" filepath="$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.iml" filepath="$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.iml" />
     </modules>
   </component>
 </project>

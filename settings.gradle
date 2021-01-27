@@ -1,2 +1,2 @@
 include ':libcodec2-android', ':m17kissht'
-rootProject.name = "Codec2Talkie"
+rootProject.name = "m17kissht"
