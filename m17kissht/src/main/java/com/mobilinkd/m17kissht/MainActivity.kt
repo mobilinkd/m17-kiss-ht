@@ -25,6 +25,7 @@ import com.mobilinkd.m17kissht.usb.UsbConnectActivity
 import com.mobilinkd.m17kissht.usb.UsbPortHandler
 import com.ustadmobile.codec2.Codec2
 import java.io.IOException
+import java.lang.StringBuilder
 import java.util.*
 
 
@@ -84,8 +85,9 @@ class MainActivity : AppCompatActivity() {
                     if (_codec2Player != null) {
                         Toast.makeText(this@MainActivity, "Bluetooth disconnected", Toast.LENGTH_SHORT).show()
                         _codec2Player!!.stopRunning()
-                        _transmitButton!!.isEnabled = false
                     }
+                    _transmitButton?.isEnabled = false
+                    startBluetoothConnectActivity()
                 }
                 ACTION_DATA_AVAILABLE -> {
                     var data = intent.extras?.get(EXTRA_DATA) as ByteArray
@@ -109,6 +111,11 @@ class MainActivity : AppCompatActivity() {
         _receivedCallSign = findViewById(R.id.textViewReceivedCallsign)
         _transmitButton = findViewById(R.id.buttonTransmit)
         _transmitButton!!.setOnTouchListener(onBtnPttTouchListener)
+
+        _callsign = getLastCallsign()
+        if (_callsign != null) {
+            _editTextCallSign!!.text = _callsign
+        }
 
         registerReceiver(onUsbDetached, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED))
         if (requestPermissions()) {
@@ -176,10 +183,12 @@ class MainActivity : AppCompatActivity() {
         if (actionId == EditorInfo.IME_ACTION_DONE ||
                 keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN && keyEvent.keyCode == KeyEvent.KEYCODE_ENTER) {
             if (keyEvent == null || !keyEvent.isShiftPressed) {
-                _callsign = textView.text.toString()
+                _callsign = validateCallsign(textView.text.toString())
+                textView.text = _callsign
                 _codec2Player?.setCallsign(_callsign)
                 _transmitButton!!.isEnabled = true
                 textView.clearFocus()
+                setLastCallsign(_callsign!!)
                 return@OnEditorActionListener false // hide keyboard.
             }
         }
@@ -234,6 +243,7 @@ class MainActivity : AppCompatActivity() {
                 startUsbConnectActivity()
             } else if (msg.what == Codec2Player.PLAYER_LISTENING) {
                 _textStatus!!.setText(R.string.state_label_idle)
+                _receivedCallSign!!.text = ""
             } else if (msg.what == Codec2Player.PLAYER_RECORDING) {
                 _textStatus!!.setText(R.string.state_label_transmit)
             } else if (msg.what == Codec2Player.PLAYER_PLAYING) {
@@ -277,6 +287,43 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun validateCallsign(callsign: String) : String {
+        var result = StringBuilder()
+        var size = 0
+        for (c in callsign) {
+            if (c >= '0' && c <= '9') {
+                result.append(c)
+                size += 1
+            } else if (c >= 'A' && c <= 'Z') {
+                result.append(c)
+                size += 1
+            } else if (c == '-' || c == '/' || c == '.') {
+                result.append(c)
+                size += 1
+            } else if (c >= 'a' && c <= 'z') {
+                result.append(c - 64)
+                size += 1
+            }
+            if (size == 9) break;
+        }
+        return result.toString()
+    }
+
+    private fun getLastCallsign() : String? {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE)
+        val address = sharedPref.getString(getString(R.string.call_sign), "")
+        if (address == "") return null
+        return address
+    }
+
+    private fun setLastCallsign(callsign: String) {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putString(getString(R.string.call_sign), callsign)
+            apply()
+        }
+    }
+
     private fun bindBleService(device: BluetoothDevice) {
         mBluetoothDevice = device
         Log.i(TAG, "Bluetooth connect to " + mBluetoothDevice?.name);
@@ -290,7 +337,7 @@ class MainActivity : AppCompatActivity() {
         if (address != null) {
             Log.i(TAG, "Bluetooth connecting to last device @ " + address);
             val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
-            val device: BluetoothDevice = bluetoothManager.getAdapter().getRemoteDevice(address)
+            val device = bluetoothManager.getAdapter().getRemoteDevice(address)
             bindBleService(device)
         } else {
             startBluetoothConnectActivity()
