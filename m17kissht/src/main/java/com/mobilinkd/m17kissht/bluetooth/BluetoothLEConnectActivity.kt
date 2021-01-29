@@ -1,5 +1,6 @@
 package com.mobilinkd.m17kissht.bluetooth
 
+import android.animation.ObjectAnimator
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothGatt
@@ -15,6 +16,8 @@ import android.content.IntentSender
 import android.os.Bundle
 import android.os.ParcelUuid
 import android.util.Log
+import android.view.View
+import android.widget.ProgressBar
 import android.widget.Toast
 import com.mobilinkd.m17kissht.R
 import java.util.*
@@ -31,6 +34,9 @@ class BluetoothLEConnectActivity : Activity() {
     private val BT_SOCKET_FAILURE = 4
     private val BT_ADAPTER_FAILURE = 5
 
+    // UI Components
+    private var mProgressBarUsb: ProgressBar? = null
+
     interface Listener {
         fun onBluetoothConnect(scanResult: ScanResult)
     }
@@ -46,6 +52,8 @@ class BluetoothLEConnectActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_usb_connect)
 
+        // mProgressBarUsb = findViewById<ProgressBar>(R.id.progressBarUsb)
+
         // Initializes Bluetooth adapter.
         val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val bluetoothAdapter = bluetoothManager.adapter
@@ -60,7 +68,20 @@ class BluetoothLEConnectActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+/*
+        if (mProgressBarUsb != null) {
+            mProgressBarUsb!!.visibility = View.VISIBLE
+            ObjectAnimator.ofInt(mProgressBarUsb!!, "progress", 10)
+                    .setDuration(300)
+                    .start()
+        }
+*/
         pairWithDevice()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // mProgressBarUsb?.visibility = View.INVISIBLE
     }
 
     private val deviceManager: CompanionDeviceManager by lazy(LazyThreadSafetyMode.NONE) {
@@ -80,7 +101,7 @@ class BluetoothLEConnectActivity : Activity() {
         // pairing options.
         val pairingRequest: AssociationRequest = AssociationRequest.Builder()
                 .addDeviceFilter(deviceFilter)
-                .setSingleDevice(true)
+                .setSingleDevice(false)
                 .build()
 
         if (D) Log.d(TAG, "pairingRequest construced with deviceFilter")

@@ -165,7 +165,7 @@ class BluetoothLEService : Service() {
 
         when (characteristic.uuid) {
             TNC_SERVICE_RX_UUID -> {
-                Log.d(TAG, "Received KISS data: " + characteristic.value.toHexString())
+                // Log.d(TAG, "Received KISS data: " + characteristic.value.toHexString())
                 intent.putExtra(EXTRA_DATA, characteristic.value)
             }
             else -> {
