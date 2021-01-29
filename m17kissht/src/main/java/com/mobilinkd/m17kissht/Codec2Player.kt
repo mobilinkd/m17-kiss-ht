@@ -17,7 +17,9 @@ import java.nio.BufferOverflowException
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
 import java.util.*
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.LinkedTransferQueue
+import java.util.concurrent.TimeUnit
 
 class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, callsign: String) : Thread() {
     private val AUDIO_SAMPLE_RATE = 8000
@@ -40,6 +42,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     private val _rxDataBuffer: ByteArray
     private var _recordAudioBuffer: ShortArray? = null
     private var _recordAudioEncodedBuffer: CharArray? = null
+    private var _bluetoothReceiveQueue = LinkedBlockingQueue<ByteArray>()
 
     // loopback mode
     private var _isLoopbackMode = false
@@ -243,7 +246,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
 
     fun onBluetoothData(data: ByteArray) {
         setStatus(PLAYER_PLAYING, 0)
-        _kissProcessor!!.receive(data)
+        _bluetoothReceiveQueue.put(data)
     }
 
     @Throws(IOException::class)
@@ -253,12 +256,18 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         }
         var bytesRead = 0
         if (_usbPort != null) {
-            bytesRead = _usbPort!!.syncRead(_rxDataBuffer, RX_TIMEOUT)
-        }
-        if (bytesRead > 0) {
-            setStatus(PLAYER_PLAYING, 0)
-            _kissProcessor!!.receive(Arrays.copyOf(_rxDataBuffer, bytesRead))
-            return true
+            if (_usbPort!!.syncRead(_rxDataBuffer, RX_TIMEOUT) > 0) {
+                setStatus(PLAYER_PLAYING, 0)
+                _kissProcessor!!.receive(Arrays.copyOf(_rxDataBuffer, bytesRead))
+                return true
+            }
+        } else {
+            var result = _bluetoothReceiveQueue.poll(RX_TIMEOUT.toLong(), TimeUnit.MILLISECONDS)
+            if (result != null) {
+                _kissProcessor!!.receive(result)
+                setStatus(PLAYER_PLAYING, 0)
+                return true
+            }
         }
         return false
     }
