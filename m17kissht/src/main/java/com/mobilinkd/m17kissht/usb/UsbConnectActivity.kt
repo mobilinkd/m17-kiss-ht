@@ -50,19 +50,25 @@ class UsbConnectActivity : AppCompatActivity() {
     private var mSerialDevice: UsbSerialDevice? = null
     private lateinit var manager: UsbManager
 
+    // UI Components
+    private var mProgressBarUsb: ProgressBar? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_usb_connect)
-        val progressBarUsb = findViewById<ProgressBar>(R.id.progressBarUsb)
-        progressBarUsb.visibility = View.VISIBLE
-        ObjectAnimator.ofInt(progressBarUsb, "progress", 10)
-                .setDuration(300)
-                .start()
+        mProgressBarUsb = findViewById<ProgressBar>(R.id.progressBarUsb)
         manager = getSystemService(USB_SERVICE) as UsbManager
     }
 
     override fun onStart() {
         super.onStart()
+
+        if (mProgressBarUsb != null) {
+            mProgressBarUsb!!.visibility = View.VISIBLE
+            ObjectAnimator.ofInt(mProgressBarUsb!!, "progress", 10)
+                    .setDuration(300)
+                    .start()
+        }
 
         val filter = IntentFilter(USB_PERM_ACTION)
         filter.addAction(ACTION_USB_DETACHED)
@@ -74,6 +80,7 @@ class UsbConnectActivity : AppCompatActivity() {
     override fun onStop() {
         super.onStop()
         unregisterReceiver(receiver)
+        mProgressBarUsb?.visibility = View.INVISIBLE
     }
 
     private fun attachSupportedDevice(device : UsbDevice) : Boolean {
