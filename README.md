@@ -6,7 +6,7 @@ updated to support M17 streaming KISS protocol over Bluetooth & USB.  This is an
 (digital voice) communication protocol using the using open source vocoder,
 [Codec2](https://github.com/drowe67/codec2).
 
-<img alt="Screenshot of main Activity" url="https://github.com/mobilinkd/m17-kiss-ht/raw/master/images/screenshot.png" width="216" />
+<img alt="Screenshot of main Activity" url="https://raw.githubusercontent.com/mobilinkd/m17-kiss-ht/master/images/screenshot.png" width="216" />
 
 # Introduction
 This Android application is a digital voice frontend for your radio. It connects to your M17
