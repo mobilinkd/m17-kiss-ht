@@ -10,15 +10,15 @@
         android:id="@+id/textBtName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginStart="8dp"
         android:layout_marginEnd="16dp"
-        android:text="Device"
+        android:text="@string/not_connected_label"
         android:textAppearance="@style/TextAppearance.AppCompat.Large"
         android:textSize="14sp"
+        app:layout_constraintBottom_toBottomOf="@+id/connectButton"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintStart_toEndOf="@+id/connectButton"
+        app:layout_constraintTop_toTopOf="@+id/connectButton" />
 
     <androidx.appcompat.widget.AppCompatButton
         android:id="@+id/buttonTransmit"
@@ -63,13 +63,13 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="24dp"
         android:layout_marginEnd="8dp"
         android:text="@string/received_call_sign"
         android:textAppearance="@style/TextAppearance.AppCompat.Small"
+        app:layout_constraintBottom_toBottomOf="@+id/textViewReceivedCallsign"
         app:layout_constraintEnd_toStartOf="@+id/textViewReceivedCallsign"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/editTextCallSign" />
+        app:layout_constraintTop_toTopOf="@+id/textViewReceivedCallsign" />
 
     <TextView
         android:id="@+id/textViewReceivedCallsign"
@@ -94,7 +94,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textBtName">
+        app:layout_constraintTop_toBottomOf="@+id/connectButton">
 
         <TextView
             android:id="@+id/textViewState"
@@ -116,5 +116,16 @@
             app:layout_constraintTop_toBottomOf="@+id/progressTxLevel" />
 
     </LinearLayout>
+
+    <ToggleButton
+        android:id="@+id/connectButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:textOff="@string/connect_label"
+        android:textOn="@string/disconnect_label"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

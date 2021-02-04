@@ -55,6 +55,7 @@ class BluetoothLEService : Service() {
                 status: Int,
                 newState: Int
         ) {
+            if (D) Log.d(TAG, "gattCallback: status = $status, state = $newState")
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     connectionState = STATE_CONNECTED
@@ -66,8 +67,9 @@ class BluetoothLEService : Service() {
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     connectionState = STATE_DISCONNECTED
                     Log.i(TAG, "Disconnected from GATT server (status = $status).")
-                    tncService = null;
+                    bluetoothGatt?.close()
                     bluetoothGatt = null
+                    tncService = null;
                     rxCharacteristic = null
                     txCharacteristic = null
                     broadcastUpdate(ACTION_GATT_DISCONNECTED)
@@ -188,8 +190,7 @@ class BluetoothLEService : Service() {
     }
 
     fun close() {
-        bluetoothGatt?.close()
-        bluetoothGatt = null
+        bluetoothGatt?.disconnect()
     }
 
     inner class LocalBinder : Binder() {

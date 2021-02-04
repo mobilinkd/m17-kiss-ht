@@ -25,8 +25,8 @@ The modem and the radio handle the M17 data link layer and physical layer.
   the modem.
 - **USB serial connectivity** (38400 bps, 8 data bits, 1 stop bit, no parity), just select this app
   after connecting to USB and it will use given connection.
-- **BluetoothLE connectivity** on startup, lists paired devices, so you can choose your modem and
-  connect.
+- **BluetoothLE connectivity** use the Connect/Disconnect button to connect/disconnect BLE devices.
+  It will attempt to connect to the last connected device.  Otherwise it will scan for devices.
 - **Callsign Identification** enter your callsign once connected in order to be able to transmit.
 - **Caller Identification** received callsign is clearly displayed when an M17 DV call is received.
 - **User Preferences** BLE device preference and user callsign will be saved for later.
@@ -76,9 +76,5 @@ across the BLE link without significant latency/jitter.
 https://www.b4x.com/android/forum/threads/uart-data-comms-using-bm78-dual-mode-ble-module.68113/
 
 # TODO
-- Improved BLE/USB connection management.
-- Audio issues when reconnecting BLE.
-- Improved UI layout.
 - Configuration screen for USB serial parameters, callsign, etc.
 - Received callsign history.
-

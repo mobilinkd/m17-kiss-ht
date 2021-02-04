@@ -27,7 +27,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     private val POST_PLAY_DELAY_MS = 400
     private val RX_TIMEOUT = 100
     private val TX_TIMEOUT = 2000
-    private val TX_DELAY_10MS_UNITS = 8.toByte()
+    private val TX_DELAY_10MS_UNITS: Byte = 8
     private val RX_BUFFER_SIZE = 8192
     private var _codec2Con: Long = 0
     private var _usbPort: UsbSerialDevice? = null

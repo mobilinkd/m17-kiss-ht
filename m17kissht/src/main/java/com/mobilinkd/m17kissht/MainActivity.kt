@@ -34,15 +34,16 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.BLUETOOTH,
             Manifest.permission.RECORD_AUDIO
     )
-    private var _isActive = false
-    private var _textConnInfo: TextView? = null
-    private var _textStatus: TextView? = null
-    private var _progressTxRxLevel: ProgressBar? = null
-    private var _editTextCallSign: TextView? = null
-    private var _receivedCallSign: TextView? = null
-    private var _transmitButton: Button? = null
-    private var _codec2Player: Codec2Player? = null
-    private var _callsign: String? = null
+    private var mIsActive = false
+    private var mDeviceTextView: TextView? = null
+    private var mStatusTextView: TextView? = null
+    private var mAudioLevelBar: ProgressBar? = null
+    private var mEditCallsign: TextView? = null
+    private var mReceivingCallsign: TextView? = null
+    private var mConnectButton: ToggleButton? = null
+    private var mTransmitButton: Button? = null
+    private var mAudioPlayer: Codec2Player? = null
+    private var mCallsign: String? = null
 
 
     private var mBluetoothDevice: BluetoothDevice? = null
@@ -55,10 +56,12 @@ class MainActivity : AppCompatActivity() {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
             Log.i(TAG, "Service connected")
             // We've bound to LocalService, cast the IBinder and get LocalService instance
-            val binder = service as BluetoothLEService.LocalBinder
-            mService = binder.service
-            mBound = true
-            binder.service.initialize(mBluetoothDevice!!)
+            if (!mBound) {
+                val binder = service as BluetoothLEService.LocalBinder
+                mService = binder.service
+                mBound = true
+            }
+            mService?.initialize(mBluetoothDevice!!)
         }
 
         override fun onServiceDisconnected(arg0: ComponentName) {
@@ -71,10 +74,13 @@ class MainActivity : AppCompatActivity() {
             when(intent?.action) {
                 ACTION_GATT_CONNECTED -> {
                     Log.i(TAG, "GATT connected")
+                    mDeviceTextView!!.text = mBluetoothDevice?.name
+                    mConnectButton?.isActivated = true
+                    mConnectButton?.isEnabled = true
                 }
                 ACTION_GATT_SERVICES_DISCOVERED -> {
                     Log.i(TAG, "KISS TNC Service connected")
-                    if (_callsign != null) _transmitButton!!.isEnabled = true
+                    if (mCallsign != null) mTransmitButton!!.isEnabled = true
                     try {
                         startPlayer(false)
                     } catch (e: IOException) {
@@ -82,16 +88,19 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 ACTION_GATT_DISCONNECTED -> {
-                    if (_codec2Player != null) {
+                    Log.i(TAG, "GATT disconnected")
+                    if (mAudioPlayer != null) {
                         Toast.makeText(this@MainActivity, "Bluetooth disconnected", Toast.LENGTH_SHORT).show()
-                        _codec2Player!!.stopRunning()
+                        mAudioPlayer!!.stopRunning()
                     }
-                    _transmitButton?.isEnabled = false
-                    startBluetoothConnectActivity()
+                    mConnectButton?.isActivated = false
+                    mConnectButton?.isEnabled = true
+                    mDeviceTextView?.text = getString(R.string.not_connected_label)
+                    mTransmitButton?.isEnabled = false
                 }
                 ACTION_DATA_AVAILABLE -> {
                     var data = intent.extras?.get(EXTRA_DATA) as ByteArray
-                    _codec2Player?.onBluetoothData(data)
+                    mAudioPlayer?.onBluetoothData(data)
                 }
             }
          }
@@ -100,21 +109,23 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        _isActive = true
+        mIsActive = true
         setContentView(R.layout.activity_main)
-        _textConnInfo = findViewById(R.id.textBtName)
-        _textStatus = findViewById(R.id.textViewState)
-        _progressTxRxLevel = findViewById(R.id.progressTxRxLevel)
-        _progressTxRxLevel!!.setMax(-Codec2Player.audioMinLevel)
-        _editTextCallSign = findViewById(R.id.editTextCallSign)
-        _editTextCallSign!!.setOnEditorActionListener(onCallsignChanged)
-        _receivedCallSign = findViewById(R.id.textViewReceivedCallsign)
-        _transmitButton = findViewById(R.id.buttonTransmit)
-        _transmitButton!!.setOnTouchListener(onBtnPttTouchListener)
+        mDeviceTextView = findViewById(R.id.textBtName)
+        mStatusTextView = findViewById(R.id.textViewState)
+        mAudioLevelBar = findViewById(R.id.progressTxRxLevel)
+        mAudioLevelBar!!.setMax(-Codec2Player.audioMinLevel)
+        mEditCallsign = findViewById(R.id.editTextCallSign)
+        mEditCallsign!!.setOnEditorActionListener(onCallsignChanged)
+        mReceivingCallsign = findViewById(R.id.textViewReceivedCallsign)
+        mTransmitButton = findViewById(R.id.buttonTransmit)
+        mTransmitButton!!.setOnTouchListener(onBtnPttTouchListener)
+        mConnectButton = findViewById(R.id.connectButton)
+        mConnectButton!!.setOnClickListener(onConnectListener)
 
-        _callsign = getLastCallsign()
-        if (_callsign != null) {
-            _editTextCallSign!!.text = _callsign
+        mCallsign = getLastCallsign()
+        if (mCallsign != null) {
+            mEditCallsign!!.text = mCallsign
         }
 
         registerReceiver(onUsbDetached, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED))
@@ -135,9 +146,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        _isActive = false
-        if (_codec2Player != null) {
-            _codec2Player!!.stopRunning()
+        mIsActive = false
+        if (mAudioPlayer != null) {
+            mAudioPlayer!!.stopRunning()
         }
     }
 
@@ -175,20 +186,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val onLoopbackCheckedChangeListener = CompoundButton.OnCheckedChangeListener { buttonView, isChecked ->
-        if (_codec2Player != null) {
-            _codec2Player!!.setLoopbackMode(isChecked)
+        if (mAudioPlayer != null) {
+            mAudioPlayer!!.setLoopbackMode(isChecked)
         }
     }
     private val onCallsignChanged = TextView.OnEditorActionListener { textView, actionId, keyEvent ->
         if (actionId == EditorInfo.IME_ACTION_DONE ||
                 keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN && keyEvent.keyCode == KeyEvent.KEYCODE_ENTER) {
             if (keyEvent == null || !keyEvent.isShiftPressed) {
-                _callsign = validateCallsign(textView.text.toString())
-                textView.text = _callsign
-                _codec2Player?.setCallsign(_callsign)
-                _transmitButton!!.isEnabled = true
+                mCallsign = validateCallsign(textView.text.toString())
+                textView.text = mCallsign
+                mAudioPlayer?.setCallsign(mCallsign)
+                mTransmitButton!!.isEnabled = true
                 textView.clearFocus()
-                setLastCallsign(_callsign!!)
+                setLastCallsign(mCallsign!!)
                 return@OnEditorActionListener false // hide keyboard.
             }
         }
@@ -197,22 +208,35 @@ class MainActivity : AppCompatActivity() {
 
     private val onUsbDetached: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (_codec2Player != null && UsbPortHandler.getPort() != null) {
+            if (mAudioPlayer != null && UsbPortHandler.getPort() != null) {
                 Toast.makeText(this@MainActivity, "USB detached", Toast.LENGTH_SHORT).show()
-                _codec2Player!!.stopRunning()
-                _transmitButton!!.isEnabled = false
+                mAudioPlayer!!.stopRunning()
+                mTransmitButton!!.isEnabled = false
+                mConnectButton?.isActivated = false
+                mConnectButton?.text = getString(R.string.connect_label)
+                mConnectButton?.isEnabled = true
+                mDeviceTextView?.text = getString(R.string.not_connected_label)
             }
         }
     }
+
     private val onBtnPttTouchListener = View.OnTouchListener { v, event ->
         when (event.action) {
-            MotionEvent.ACTION_DOWN -> if (_codec2Player != null && _callsign != null) _codec2Player!!.startRecording()
+            MotionEvent.ACTION_DOWN -> if (mAudioPlayer != null && mCallsign != null) mAudioPlayer!!.startRecording()
             MotionEvent.ACTION_UP -> {
                 v.performClick()
-                if (_codec2Player != null) _codec2Player!!.startPlayback()
+                if (mAudioPlayer != null) mAudioPlayer!!.startPlayback()
             }
         }
         false
+    }
+
+    private val onConnectListener = View.OnClickListener { _ ->
+        if (mConnectButton!!.isChecked) {
+            connectToBluetooth()
+        } else {
+            mService?.close()
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
@@ -237,39 +261,39 @@ class MainActivity : AppCompatActivity() {
 
     private val onPlayerStateChanged: Handler = object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
-            if (_isActive && msg.what == Codec2Player.PLAYER_DISCONNECT) {
-                _textStatus!!.text = "STOP"
+            if (mIsActive && msg.what == Codec2Player.PLAYER_DISCONNECT) {
+                mStatusTextView!!.text = "STOP"
                 Toast.makeText(baseContext, "Disconnected from modem", Toast.LENGTH_SHORT).show()
                 startUsbConnectActivity()
             } else if (msg.what == Codec2Player.PLAYER_LISTENING) {
-                _textStatus!!.setText(R.string.state_label_idle)
-                _receivedCallSign!!.text = ""
+                mStatusTextView!!.setText(R.string.state_label_idle)
+                mReceivingCallsign!!.text = ""
             } else if (msg.what == Codec2Player.PLAYER_RECORDING) {
-                _textStatus!!.setText(R.string.state_label_transmit)
+                mStatusTextView!!.setText(R.string.state_label_transmit)
             } else if (msg.what == Codec2Player.PLAYER_PLAYING) {
-                _textStatus!!.setText(R.string.state_label_receive)
+                mStatusTextView!!.setText(R.string.state_label_receive)
             } else if (msg.what == Codec2Player.PLAYER_RX_LEVEL) {
-                _progressTxRxLevel!!.progressDrawable.colorFilter = PorterDuffColorFilter(colorFromAudioLevel(msg.arg1), PorterDuff.Mode.SRC_IN)
-                _progressTxRxLevel!!.progress = msg.arg1 - Codec2Player.audioMinLevel
+                mAudioLevelBar!!.progressDrawable.colorFilter = PorterDuffColorFilter(colorFromAudioLevel(msg.arg1), PorterDuff.Mode.SRC_IN)
+                mAudioLevelBar!!.progress = msg.arg1 - Codec2Player.audioMinLevel
             } else if (msg.what == Codec2Player.PLAYER_TX_LEVEL) {
-                _progressTxRxLevel!!.progressDrawable.colorFilter = PorterDuffColorFilter(colorFromAudioLevel(msg.arg1), PorterDuff.Mode.SRC_IN)
-                _progressTxRxLevel!!.progress = msg.arg1 - Codec2Player.audioMinLevel
+                mAudioLevelBar!!.progressDrawable.colorFilter = PorterDuffColorFilter(colorFromAudioLevel(msg.arg1), PorterDuff.Mode.SRC_IN)
+                mAudioLevelBar!!.progress = msg.arg1 - Codec2Player.audioMinLevel
             } else if (msg.what == Codec2Player.PLAYER_CALLSIGN_RECEIVED) {
                 val callsign = msg.obj as String
-                _receivedCallSign!!.text = callsign
+                mReceivingCallsign!!.text = callsign
             }
         }
     }
 
     @Throws(IOException::class)
     private fun startPlayer(isUsb: Boolean) {
-        _codec2Player = Codec2Player(onPlayerStateChanged, CODEC2_DEFAULT_MODE, _callsign ?: "")
+        mAudioPlayer = Codec2Player(onPlayerStateChanged, CODEC2_DEFAULT_MODE, mCallsign ?: "")
         if (isUsb) {
-            _codec2Player!!.setUsbPort(UsbPortHandler.getPort())
+            mAudioPlayer!!.setUsbPort(UsbPortHandler.getPort())
         } else {
-            _codec2Player!!.setBleService(mService!!)
+            mAudioPlayer!!.setBleService(mService!!)
         }
-        _codec2Player!!.start()
+        mAudioPlayer!!.start()
     }
 
     private fun getLastBleDevice() : String? {
@@ -326,10 +350,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindBleService(device: BluetoothDevice) {
         mBluetoothDevice = device
-        Log.i(TAG, "Bluetooth connect to " + mBluetoothDevice?.name);
+        Log.i(TAG, "Bluetooth connect to " + mBluetoothDevice?.name)
         val gattServiceIntent = Intent(this, BluetoothLEService::class.java)
-        bindService(gattServiceIntent, connection, BIND_AUTO_CREATE)
-        _textConnInfo!!.text = mBluetoothDevice?.name
+        if (!mBound) {
+            bindService(gattServiceIntent, connection, BIND_AUTO_CREATE)
+        } else {
+            Log.i(TAG, "Re-initializing bound service")
+            mService?.initialize(mBluetoothDevice!!)
+        }
+        mConnectButton?.isEnabled = false
     }
 
     private fun connectToBluetooth() {
@@ -338,10 +367,12 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "Bluetooth connecting to last device @ " + address);
             val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
             val device = bluetoothManager.getAdapter().getRemoteDevice(address)
-            bindBleService(device)
-        } else {
-            startBluetoothConnectActivity()
+            if (device.bondState == BluetoothDevice.BOND_BONDED) {
+                bindBleService(device)
+                return
+            }
         }
+        startBluetoothConnectActivity()
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -361,11 +392,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
         if (requestCode == REQUEST_CONNECT_USB) {
-            if (resultCode == RESULT_CANCELED) {
-                connectToBluetooth()
-            } else if (resultCode == RESULT_OK) {
-                if (_callsign != null) _transmitButton!!.isEnabled = true
-                _textConnInfo!!.text = data!!.getStringExtra("name")
+            if (resultCode == RESULT_OK) {
+                if (mCallsign != null) mTransmitButton!!.isEnabled = true
+                mDeviceTextView!!.text = data!!.getStringExtra("name")
+                mConnectButton?.isActivated = true
+                mConnectButton?.text = getString(R.string.disconnect_label)
+                mConnectButton?.isEnabled = false
                 try {
                     startPlayer(true)
                 } catch (e: IOException) {
