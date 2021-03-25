@@ -76,10 +76,10 @@ public class M17Processor {
     {
         byte[] result = new byte[30];
         for (int i = 0; i != mEncodedCallsign.length; i++) {
-            result[i] = mEncodedCallsign[i];
+            result[i + 6] = (byte) 0xFF;
         }
         for (int i = 0; i != mEncodedCallsign.length; i++) {
-            result[i + 6] = (byte) 0xFF;
+            result[i] = mEncodedCallsign[i];
         }
         result[12] = 0x00;
         result[13] = 0x05;
