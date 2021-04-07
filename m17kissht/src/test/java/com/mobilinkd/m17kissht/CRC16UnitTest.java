@@ -4,7 +4,6 @@ import com.mobilinkd.m17kissht.m17.CRC16;
 
 import org.junit.Test;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 /**

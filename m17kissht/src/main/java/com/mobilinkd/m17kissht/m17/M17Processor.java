@@ -12,7 +12,7 @@ public class M17Processor {
     private byte[] mEncodedCallsign;
     private byte[] mLinkSetupFrame;
     private byte[][] mLICH = new byte[6][6];
-    private int mColorCode = 0;
+    private int mColorCode = 10;
     private int mFrameNumber = 0;
     private int mLichCounter = 0;
 
@@ -40,8 +40,8 @@ public class M17Processor {
 
         // Convert the integer value to a byte array.
         byte[] output = new byte[6];
-        for (int i = 0; i != 6; ++i) {
-            output[i] = (byte) (encoded & 0xFF);
+        for (int i = 6; i != 0; --i) {
+            output[i - 1] = (byte) (encoded & 0xFF);
             encoded >>= 8;
         }
 
@@ -54,9 +54,9 @@ public class M17Processor {
 
         // Convert byte array to integer value.
         long encoded = 0;
-        for (int i = encodedCallsign.length; i != 0; i--) {
+        for (int i = 0; i != encodedCallsign.length; i++) {
             encoded <<= 8;
-            encoded += 0xFF & ((int) encodedCallsign[i - 1]);
+            encoded += 0xFF & ((int) encodedCallsign[i]);
         }
 
         assert((encoded & 0xFFFFFFFFFFFFL) == encoded);
@@ -75,14 +75,16 @@ public class M17Processor {
     byte[] makeLinkSetupFrame()
     {
         byte[] result = new byte[30];
+        // Destination
         for (int i = 0; i != mEncodedCallsign.length; i++) {
-            result[i + 6] = (byte) 0xFF;
+            result[i] = (byte) 0xFF;
         }
+        // Source (our callsign)
         for (int i = 0; i != mEncodedCallsign.length; i++) {
-            result[i] = mEncodedCallsign[i];
+            result[i + 6] = mEncodedCallsign[i];
         }
-        result[12] = 0x00;
-        result[13] = 0x05;
+        result[12] = (byte) (0x00 | (mColorCode >> 1));
+        result[13] = (byte) (0x05 | (byte) ((mColorCode << 7) & 0xff));
         for (int i = 14; i != 28; i++) {
             result[i] = 0x00;
         }
@@ -130,6 +132,7 @@ public class M17Processor {
 
     public void setColorCode(int colorCode) {
         mColorCode = colorCode;
+        mLinkSetupFrame = makeLinkSetupFrame();
         makeLICH();
     }
 
