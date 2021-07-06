@@ -162,7 +162,7 @@ public class M17Processor {
     private byte[] makeAudioFrame(byte[] audio, int frameNumber) {
         assert(audio.length == 16);
 
-        byte[] frame = new byte[26];
+        byte[] frame = new byte[24];
 
         if (D) Log.d(TAG, String.format("sending frame %04x", frameNumber));
 
@@ -172,11 +172,6 @@ public class M17Processor {
         frame[6] = (byte) ((frameNumber >> 8) & 0xFF);
         frame[7] = (byte) (frameNumber & 0xFF);
         System.arraycopy(audio,0, frame, 8, 16);
-        mCRC.reset();
-        mCRC.crc(Arrays.copyOfRange(frame, 6, 24));
-        byte[] crc = mCRC.getBytes();
-        frame[24] = crc[0];
-        frame[25] = crc[1];
 
         return frame;
     }
@@ -204,15 +199,18 @@ public class M17Processor {
     }
 
     private String parseLinkSetupFrame(byte[] frame) {
-        return decode(Arrays.copyOfRange(frame, 0, 6));
+        return decode(Arrays.copyOfRange(frame, 6, 12));
     }
 
     public void receive(byte[] frame) {
         if (frame.length == 30) {
             String callsign = parseLinkSetupFrame(frame);
             mCallback.onReceiveLinkSetup(callsign);
-        } else if (frame.length == 26) {
+        } else if (frame.length == 26) { // Old-style frame with CRC
             // Assume everything is OK. Just extract the audio data.
+            mCallback.onReceiveAudio(Arrays.copyOfRange(frame, 8,24));
+        } else if (frame.length == 24) {
+            // Extract the audio data.
             mCallback.onReceiveAudio(Arrays.copyOfRange(frame, 8,24));
         }
     }

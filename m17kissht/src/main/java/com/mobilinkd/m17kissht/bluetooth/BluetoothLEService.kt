@@ -9,12 +9,12 @@ import android.util.Log
 import java.util.*
 
 
-const val ACTION_GATT_CONNECTED = "com.mobilinkd.radio.codec2talkie.bluetooth.ACTION_GATT_CONNECTED"
-const val ACTION_GATT_DISCONNECTED = "com.mobilinkd.radio.codec2talkie.bluetooth.ACTION_GATT_DISCONNECTED"
-const val ACTION_GATT_SERVICES_DISCOVERED = "com.mobilinkd.radio.codec2talkie.bluetooth.ACTION_GATT_SERVICES_DISCOVERED"
-const val ACTION_GATT_SERVICE_DISCOVERY_FAILED = "com.mobilinkd.radio.codec2talkie.bluetooth.ACTION_GATT_SERVICE_DISCOVERY_FAILED"
-const val ACTION_DATA_AVAILABLE = "com.mobilinkd.radio.codec2talkie.bluetooth.ACTION_DATA_AVAILABLE"
-const val EXTRA_DATA = "com.mobilinkd.radio.codec2talkie.bluetooth.EXTRA_DATA"
+const val ACTION_GATT_CONNECTED = "com.mobilinkd.m17kissht.bluetooth.ACTION_GATT_CONNECTED"
+const val ACTION_GATT_DISCONNECTED = "com.mobilinkd.m17kissht.bluetooth.ACTION_GATT_DISCONNECTED"
+const val ACTION_GATT_SERVICES_DISCOVERED = "com.mobilinkd.m17kissht.bluetooth.ACTION_GATT_SERVICES_DISCOVERED"
+const val ACTION_GATT_SERVICE_DISCOVERY_FAILED = "com.mobilinkd.m17kissht.bluetooth.ACTION_GATT_SERVICE_DISCOVERY_FAILED"
+const val ACTION_DATA_AVAILABLE = "com.mobilinkd.m17kissht.bluetooth.ACTION_DATA_AVAILABLE"
+const val EXTRA_DATA = "com.mobilinkd.m17kissht.bluetooth.EXTRA_DATA"
 
 private const val STATE_DISCONNECTED = 0
 private const val STATE_CONNECTING = 1
@@ -29,7 +29,7 @@ class BluetoothLEService : Service() {
     private val CONFIG_DESCRIPTOR_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
     private val D = true
-    private val TAG = BluetoothLEService::class.java.simpleName
+    private val TAG = BluetoothLEService::class.java.name
 
     private var mBluetoothManager: BluetoothManager? = null
     private var mBluetoothAdapter: BluetoothAdapter? = null

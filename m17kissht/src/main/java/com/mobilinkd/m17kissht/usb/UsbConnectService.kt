@@ -21,7 +21,7 @@ import com.felhr.usbserial.UsbSerialDevice
 import com.felhr.usbserial.UsbSerialInterface
 import com.mobilinkd.m17kissht.R
 
-class UsbConnectActivity : AppCompatActivity() {
+class UsbConnectService : AppCompatActivity() {
     // Logging/Debugging
     var D = true
     var TAG = "UsbConnectActivity"
@@ -116,10 +116,8 @@ class UsbConnectActivity : AppCompatActivity() {
 
     private val receiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx : Context, intent : Intent) {
-            Log.d(TAG, "onReceive: $intent")
-
+            Log.d(TAG, "onReceive: $intent.action")
             val resultMsg = Message()
-
             when(intent.action) {
                 ACTION_USB_DETACHED -> {
                     if (D) Log.d(TAG,"USB device detached.")

@@ -31,12 +31,32 @@ The modem and the radio handle the M17 data link layer and physical layer.
 - **Caller Identification** received callsign is clearly displayed when an M17 DV call is received.
 - **User Preferences** BLE device preference and user callsign will be saved for later.
 
+# Usability Notes
+
+- Android seems to have issues connecting to the same Bluetooth device over both BLE and "classic".
+  The TNC3 may need to be re-paired when switching modes, such as when switching between the
+  Mobilinkd Config app (classic) and the M17 KISS HT app (BLE).
+- Switching between BLE devices will require that the currently bonded device be powered off,
+  initiating a connection, and then waiting for the connection to time out, resulting in a re-scan
+  of available BLE devices.  The new device should appear in the connection dialog.
+
 # Suitable radios and modems
+
+Any radio which is advertised as 9600-baud capable should be usable for M17.  However, M17 seems
+to place more demands on a flat TX and RX response, and relies on good low-frequency response of
+the modulator.  Radios should also key up very quickly, with key-up times below 10ms the ideal.
+
 - Tested, works:
   - Mobilinkd TNC3 (BLE & USB) using experimental firmware
   - Mobilinkd NucleoTNC (USB) using stock firmware
-  - Kenwood TM-V71A
-  - Kenwood TK-790
+  - Kenwood TM-V71A - This is a well-balance radio with reasonable TX and RX performance.  This
+    requires a fairly long TX Delay (12/120ms). Requires reverse TX polarity.
+  - Kenwood TK-790 - This has reasonable TX performance.  The modulator seems to have poor low
+    frequency response, resulting in higher symbol errors.  However, it seems seems to have
+    quite good RX performance.  This requires a short TX Delay; 6/60ms works reliably.
+  - Yaesu FT-991 - This has the best TX performance, with good low-frequency respons and the lowest
+    symbol offset error, but has the least flat RX response. This requires a short TX Delay; 6/60ms
+    works reliably.
 
 # Related Projects
 - Codec2 codec: https://github.com/drowe67/codec2

@@ -6,11 +6,13 @@ import android.os.Message
 import android.os.Process
 import android.util.Log
 import com.felhr.usbserial.UsbSerialDevice
+import com.felhr.usbserial.UsbSerialInterface.UsbReadCallback
 import com.mobilinkd.m17kissht.bluetooth.BluetoothLEService
 import com.mobilinkd.m17kissht.kiss.KissCallback
 import com.mobilinkd.m17kissht.kiss.KissProcessor
 import com.mobilinkd.m17kissht.m17.M17Callback
 import com.mobilinkd.m17kissht.m17.M17Processor
+import com.mobilinkd.m17kissht.usb.UsbService
 import com.ustadmobile.codec2.Codec2
 import java.io.IOException
 import java.nio.BufferOverflowException
@@ -21,6 +23,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.LinkedTransferQueue
 import java.util.concurrent.TimeUnit
 
+
 class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, callsign: String) : Thread() {
     private val AUDIO_SAMPLE_RATE = 8000
     private val SLEEP_IDLE_DELAY_MS = 20
@@ -30,7 +33,6 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     private val TX_DELAY_10MS_UNITS: Byte = 8
     private val RX_BUFFER_SIZE = 8192
     private var _codec2Con: Long = 0
-    private var _usbPort: UsbSerialDevice? = null
     private var _audioBufferSize = 0
     private var _audioEncodedBufferSize = 0
     private var _isRunning = true
@@ -42,7 +44,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     private val _rxDataBuffer: ByteArray
     private var _recordAudioBuffer: ShortArray? = null
     private var _recordAudioEncodedBuffer: CharArray? = null
-    private var _bluetoothReceiveQueue = LinkedBlockingQueue<ByteArray>()
+    private var _receiveQueue = LinkedBlockingQueue<ByteArray>()
 
     // loopback mode
     private var _isLoopbackMode = false
@@ -52,9 +54,19 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     private var _m17Processor: M17Processor? = null
     private var _kissProcessor: KissProcessor? = null
     private val _callsign: String
-    fun setUsbPort(port: UsbSerialDevice?) {
-        _usbPort = port
+
+    private var mUsbService: UsbService? = null
+
+    fun setUsbService(service: UsbService?) {
+        mUsbService = service
     }
+
+    private var mService: BluetoothLEService? = null
+
+    fun setBleService(service: BluetoothLEService) {
+        mService = service
+    }
+
 
     fun setLoopbackMode(isLoopbackMode: Boolean) {
         _isLoopbackMode = isLoopbackMode
@@ -82,12 +94,6 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     }
 
 
-    private var mService: BluetoothLEService? = null
-
-    fun setBleService(service: BluetoothLEService) {
-        mService = service
-    }
-
     private fun setCodecModeInternal(codecMode: Int) {
         _codec2Con = Codec2.create(codecMode)
         _audioBufferSize = Codec2.getSamplesPerFrame(_codec2Con)
@@ -113,12 +119,11 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
                     timer = Timer()
                     val task: TimerTask = object : TimerTask() {
                         override fun run() {
-                            var count = 1
                             if (!primed) {
-                                if (mService != null) count = 7
-                                primed = true
+                                if (queue.size > 1) primed = true
                             }
-                            for (i in 0 until count) {
+                            else
+                            {
                                 val data = queue.poll()
                                 if (data == null) {
                                     Log.d("M17Callback", String.format("queue empty; cancelled."))
@@ -136,7 +141,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
                         }
                     }
                     timer_active = true
-                    timer!!.schedule(task, 400, 40)
+                    timer!!.schedule(task, 200, 40)
                 }
             }
             queue.add(data)
@@ -185,8 +190,8 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
                 if (!mService!!.write(data)) {
                     Log.e(TAG, "BLE write failed")
                 }
-            } else if (_usbPort != null) {
-                _usbPort!!.syncWrite(data, TX_TIMEOUT)
+            } else if (mUsbService != null) {
+                mUsbService!!.write(data)
             } else {
                 if (D) Log.d(TAG, "Dropping sent data")
             }
@@ -244,9 +249,9 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         _m17Processor!!.send(frame)
     }
 
-    fun onBluetoothData(data: ByteArray) {
+    fun onTncData(data: ByteArray) {
         setStatus(PLAYER_PLAYING, 0)
-        _bluetoothReceiveQueue.put(data)
+        _receiveQueue.put(data)
     }
 
     @Throws(IOException::class)
@@ -254,21 +259,13 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         if (_isLoopbackMode) {
             return processLoopbackPlayback()
         }
-        var bytesRead = 0
-        if (_usbPort != null) {
-            if (_usbPort!!.syncRead(_rxDataBuffer, RX_TIMEOUT) > 0) {
-                setStatus(PLAYER_PLAYING, 0)
-                _kissProcessor!!.receive(Arrays.copyOf(_rxDataBuffer, bytesRead))
-                return true
-            }
-        } else {
-            var result = _bluetoothReceiveQueue.poll(RX_TIMEOUT.toLong(), TimeUnit.MILLISECONDS)
-            if (result != null) {
-                _kissProcessor!!.receive(result)
-                setStatus(PLAYER_PLAYING, 0)
-                return true
-            }
+        var receivedData = _receiveQueue.poll(RX_TIMEOUT.toLong(), TimeUnit.MILLISECONDS)
+        if (receivedData != null) {
+            _kissProcessor!!.receive(receivedData)
+            setStatus(PLAYER_PLAYING, 0)
+            return true
         }
+//        Log.w(TAG, "playAudio: receivedData is null")
         return false
     }
 
@@ -313,9 +310,8 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         _audioPlayer.release()
         Codec2.destroy(_codec2Con)
 
-        if (_usbPort != null) {
-            _usbPort!!.close()
-            _usbPort = null
+        if (mUsbService != null) {
+            mUsbService = null
         }
         if (mService != null) {
             mService = null
@@ -369,7 +365,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     }
 
     companion object {
-        private val TAG = Codec2Player::class.java.simpleName
+        private val TAG = Codec2Player::class.java.name
         private val D = true
         var PLAYER_DISCONNECT = 1
         var PLAYER_LISTENING = 2

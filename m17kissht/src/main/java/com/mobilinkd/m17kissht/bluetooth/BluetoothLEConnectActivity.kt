@@ -25,7 +25,7 @@ import java.util.*
 class BluetoothLEConnectActivity : Activity() {
 
     // Debugging
-    private val TAG = "MainFragment"
+    private val TAG = BluetoothLEConnectActivity::class.java.name
     private val D = true
 
     private val BT_ENABLE = 1

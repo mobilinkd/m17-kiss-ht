@@ -3,12 +3,12 @@ package com.mobilinkd.m17kissht
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffColorFilter
+import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.*
 import android.util.Log
@@ -21,8 +21,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.mobilinkd.m17kissht.bluetooth.*
-import com.mobilinkd.m17kissht.usb.UsbConnectActivity
 import com.mobilinkd.m17kissht.usb.UsbPortHandler
+import com.mobilinkd.m17kissht.usb.UsbService
 import com.ustadmobile.codec2.Codec2
 import java.io.IOException
 import java.lang.StringBuilder
@@ -31,8 +31,9 @@ import java.util.*
 
 class MainActivity : AppCompatActivity() {
     private val _requiredPermissions = arrayOf(
-            Manifest.permission.BLUETOOTH,
-            Manifest.permission.RECORD_AUDIO
+        Manifest.permission.BLUETOOTH,
+        Manifest.permission.RECORD_AUDIO,
+        Manifest.permission.WAKE_LOCK
     )
     private var mIsActive = false
     private var mDeviceTextView: TextView? = null
@@ -45,31 +46,79 @@ class MainActivity : AppCompatActivity() {
     private var mAudioPlayer: Codec2Player? = null
     private var mCallsign: String? = null
 
-
     private var mBluetoothDevice: BluetoothDevice? = null
-    private var mService: BluetoothLEService? = null
-    private var mBound: Boolean = false
+    private var mBleService: BluetoothLEService? = null
+    private var mUsbService: UsbService? = null
+
+    private var mWakeLock: PowerManager.WakeLock? = null
+
+//    /** Defines callbacks for service binding, passed to bindService()  */
+//    private val connection = object : ServiceConnection {
+//        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+//            Log.i(TAG, "onServiceConnected: className -> " + className.className)
+//            if (className.className == BluetoothLEService::class.java.name) {
+//                Log.i(TAG, "binding to: " + className.shortClassName)
+//                val binder = service as BluetoothLEService.LocalBinder
+//                mBleService = binder.service
+//                mBleService?.initialize(mBluetoothDevice!!)
+//            }
+//            else if (className.className == UsbService::class.java.name)
+//            {
+//                Log.i(TAG, "binding to: " + className.shortClassName)
+//                val binder = service as UsbService.LocalBinder
+//                mUsbService = binder.service
+//                mUsbService?.setHandler(usbHandler)
+//                mUsbService?.setMainActivity(this@MainActivity)
+//            }
+//        }
+//
+//        override fun onServiceDisconnected(className: ComponentName) {
+//            if (className.className == "BluetoothLEService") {
+//                mBleService = null
+//            }
+//            else if (className.className == "UsbService") {
+//                mUsbService = null
+//            }
+//        }
+//    }
 
     /** Defines callbacks for service binding, passed to bindService()  */
-    private val connection = object : ServiceConnection {
-
+    private val bleConnection = object : ServiceConnection {
         override fun onServiceConnected(className: ComponentName, service: IBinder) {
-            Log.i(TAG, "Service connected")
-            // We've bound to LocalService, cast the IBinder and get LocalService instance
-            if (!mBound) {
-                val binder = service as BluetoothLEService.LocalBinder
-                mService = binder.service
-                mBound = true
-            }
-            mService?.initialize(mBluetoothDevice!!)
+            Log.i(TAG, "onServiceConnected: className -> " + className.className)
+            Log.i(TAG, "binding to: " + className.shortClassName)
+            val binder = service as BluetoothLEService.LocalBinder
+            mBleService = binder.service
+            mBleService?.initialize(mBluetoothDevice!!)
         }
 
-        override fun onServiceDisconnected(arg0: ComponentName) {
-            mBound = false
+        override fun onServiceDisconnected(className: ComponentName) {
+            mBleService = null
         }
     }
 
-    private val bluetoothReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+    /** Defines callbacks for service binding, passed to bindService()  */
+    private val usbConnection = object : ServiceConnection {
+        override fun onServiceConnected(className: ComponentName, service: IBinder) {
+            Log.i(TAG, "onServiceConnected: className -> " + className.className)
+            val binder = service as UsbService.LocalBinder
+            mUsbService = binder.service
+            mUsbService?.setHandler(usbHandler)
+            mUsbService?.setMainActivity(this@MainActivity)
+            val device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE) as UsbDevice?
+            if (device != null) {
+                if (!mUsbService!!.attachSupportedDevice(device!!))
+                    Toast.makeText(this@MainActivity, "USB device not supported", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        override fun onServiceDisconnected(className: ComponentName) {
+            Log.i(TAG, "usbConnection.onServiceDisconnected: className -> " + className.className)
+            mUsbService = null
+        }
+    }
+
+    private val bleReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when(intent?.action) {
                 ACTION_GATT_CONNECTED -> {
@@ -100,7 +149,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 ACTION_DATA_AVAILABLE -> {
                     var data = intent.extras?.get(EXTRA_DATA) as ByteArray
-                    mAudioPlayer?.onBluetoothData(data)
+                    mAudioPlayer?.onTncData(data)
                 }
             }
          }
@@ -109,6 +158,8 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "onCreate() -> " + intent.action)
+
         mIsActive = true
         setContentView(R.layout.activity_main)
         mDeviceTextView = findViewById(R.id.textBtName)
@@ -127,35 +178,59 @@ class MainActivity : AppCompatActivity() {
         if (mCallsign != null) {
             mEditCallsign!!.text = mCallsign
         }
+    }
 
-        registerReceiver(onUsbDetached, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED))
-        if (requestPermissions()) {
-            startUsbConnectActivity()
-        }
+    override fun onStart() {
+        Log.d(TAG, "onStart() -> " + intent.action)
+        super.onStart()
+        registerReceiver(bleReceiver, makeGattUpdateIntentFilter())
+        registerReceiver(usbReceiver, makeUsbIntentFilter())
+        bindUsbService()
     }
 
     override fun onResume() {
         super.onResume()
-        registerReceiver(bluetoothReceiver, makeGattUpdateIntentFilter())
+        Log.d(TAG, "onResume() -> " + intent.action)
+
+        if (intent.action == UsbService.ACTION_USB_ATTACHED) {
+            val device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE) as UsbDevice?
+            if (mUsbService == null)
+                Toast.makeText(this, "USB services not connected", Toast.LENGTH_SHORT).show()
+            else if (mUsbService!!.connected())
+                Toast.makeText(this, "USB connected", Toast.LENGTH_SHORT).show()
+            else if (device != null)
+                if (!mUsbService!!.attachSupportedDevice(device!!))
+                    Toast.makeText(this, "USB device not supported", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onPause() {
+        Log.d(TAG, "onPause() -> " + intent.action)
         super.onPause()
-        unregisterReceiver(bluetoothReceiver)
+    }
+
+    override fun onStop() {
+        Log.d(TAG, "onStop()")
+        super.onStop()
+        unregisterReceiver(bleReceiver)
+        unregisterReceiver(usbReceiver)
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "onDestroy()")
         super.onDestroy()
         mIsActive = false
         if (mAudioPlayer != null) {
             mAudioPlayer!!.stopRunning()
         }
+        mWakeLock?.release()
+        mWakeLock = null;
     }
 
-    protected fun startUsbConnectActivity() {
-        val usbConnectIntent = Intent(this, UsbConnectActivity::class.java)
-        startActivityForResult(usbConnectIntent, REQUEST_CONNECT_USB)
-    }
+//    protected fun startUsbConnectActivity() {
+//        val usbConnectIntent = Intent(this, UsbConnectService::class.java)
+//        startActivityForResult(usbConnectIntent, REQUEST_CONNECT_USB)
+//    }
 
     protected fun startBluetoothConnectActivity() {
         val bluetoothConnectIntent = Intent(this, BluetoothLEConnectActivity::class.java)
@@ -206,16 +281,83 @@ class MainActivity : AppCompatActivity() {
         false
     }
 
-    private val onUsbDetached: BroadcastReceiver = object : BroadcastReceiver() {
+    private val usbReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (mAudioPlayer != null && UsbPortHandler.getPort() != null) {
-                Toast.makeText(this@MainActivity, "USB detached", Toast.LENGTH_SHORT).show()
-                mAudioPlayer!!.stopRunning()
-                mTransmitButton!!.isEnabled = false
-                mConnectButton?.isActivated = false
-                mConnectButton?.text = getString(R.string.connect_label)
-                mConnectButton?.isEnabled = true
-                mDeviceTextView?.text = getString(R.string.not_connected_label)
+            Log.d(TAG, "usbReceiver.onReceive() -> " + intent?.action)
+            when(intent?.action) {
+                UsbService.ACTION_USB_ATTACHED -> {
+                    val device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE) as UsbDevice?
+                    if (device != null) mUsbService?.attachSupportedDevice(device!!)
+                }
+                UsbService.ACTION_USB_DETACHED -> {
+                    Toast.makeText(this@MainActivity, "USB detached", Toast.LENGTH_SHORT).show()
+                    mUsbService?.disconnect()
+                    mAudioPlayer?.stopRunning()
+                    mTransmitButton?.isEnabled = false
+                    mConnectButton?.isActivated = false
+                    mConnectButton?.text = getString(R.string.connect_label)
+                    mConnectButton?.isEnabled = true
+                    mDeviceTextView?.text = getString(R.string.not_connected_label)
+                    mWakeLock?.release()
+                    mWakeLock = null;
+                    mUsbService?.disconnect()
+                }
+                UsbService.ACTION_USB_PERMISSION -> {
+                    val granted = intent.extras!!.getBoolean(UsbManager.EXTRA_PERMISSION_GRANTED)
+                    if (granted)
+                    {
+                        Log.i(TAG, "USB permission granted")
+                        val permIntent = Intent(UsbService.ACTION_USB_PERMISSION_GRANTED)
+                        mUsbService?.connect()
+                    } else {
+                        Log.i(TAG, "USB permission denied")
+                        Toast.makeText(context, "USB Permission not granted", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                UsbService.ACTION_NO_USB -> {
+                    Toast.makeText(context, "No USB connected", Toast.LENGTH_SHORT).show()
+                }
+                UsbService.ACTION_USB_NOT_SUPPORTED -> {
+                    Toast.makeText(context, "USB device not supported", Toast.LENGTH_SHORT).show();
+                }
+                UsbService.ACTION_USB_DISCONNECTED -> {
+                }
+                UsbService.ACTION_USB_READY -> {
+                    Log.d(TAG, "ACTION_USB_READY")
+                    if (mCallsign != null) mTransmitButton!!.isEnabled = true
+                    val deviceName = intent!!.getStringExtra(UsbService.USB_DEVICE_NAME)
+                    mDeviceTextView!!.text = deviceName
+                    Log.d(TAG, "Connected to " + deviceName)
+                    mConnectButton?.isActivated = true
+                    mConnectButton?.text = getString(R.string.disconnect_label)
+                    mConnectButton?.isEnabled = false
+                    mWakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+                        newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MyApp::MyWakelockTag").apply {
+                            acquire()
+                        }
+                    }
+                    try {
+                        startPlayer(true)
+                    } catch (e: IOException) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+    }
+
+    private val usbHandler: Handler = object : Handler(Looper.getMainLooper()) {
+        override fun handleMessage(msg: Message) {
+            when (msg.what) {
+                UsbService.DATA_RECEIVED -> {
+                    mAudioPlayer?.onTncData(msg.obj as ByteArray)
+                }
+                UsbService.CTS_CHANGE -> {
+                    // pass
+                }
+                UsbService.DSR_CHANGE -> {
+                    // pass
+                }
             }
         }
     }
@@ -235,7 +377,7 @@ class MainActivity : AppCompatActivity() {
         if (mConnectButton!!.isChecked) {
             connectToBluetooth()
         } else {
-            mService?.close()
+            mBleService?.close()
         }
     }
 
@@ -251,7 +393,7 @@ class MainActivity : AppCompatActivity() {
             }
             if (allGranted) {
                 Toast.makeText(this@MainActivity, "Permissions Granted", Toast.LENGTH_SHORT).show()
-                startUsbConnectActivity()
+//                startUsbConnectActivity()
             } else {
                 Toast.makeText(this@MainActivity, "Permissions Denied", Toast.LENGTH_SHORT).show()
                 finish()
@@ -264,7 +406,7 @@ class MainActivity : AppCompatActivity() {
             if (mIsActive && msg.what == Codec2Player.PLAYER_DISCONNECT) {
                 mStatusTextView!!.text = "STOP"
                 Toast.makeText(baseContext, "Disconnected from modem", Toast.LENGTH_SHORT).show()
-                startUsbConnectActivity()
+//                startUsbConnectActivity()
             } else if (msg.what == Codec2Player.PLAYER_LISTENING) {
                 mStatusTextView!!.setText(R.string.state_label_idle)
                 mReceivingCallsign!!.text = ""
@@ -289,9 +431,9 @@ class MainActivity : AppCompatActivity() {
     private fun startPlayer(isUsb: Boolean) {
         mAudioPlayer = Codec2Player(onPlayerStateChanged, CODEC2_DEFAULT_MODE, mCallsign ?: "")
         if (isUsb) {
-            mAudioPlayer!!.setUsbPort(UsbPortHandler.getPort())
+            mAudioPlayer!!.setUsbService(mUsbService)
         } else {
-            mAudioPlayer!!.setBleService(mService!!)
+            mAudioPlayer!!.setBleService(mBleService!!)
         }
         mAudioPlayer!!.start()
     }
@@ -352,27 +494,37 @@ class MainActivity : AppCompatActivity() {
         mBluetoothDevice = device
         Log.i(TAG, "Bluetooth connect to " + mBluetoothDevice?.name)
         val gattServiceIntent = Intent(this, BluetoothLEService::class.java)
-        if (!mBound) {
-            bindService(gattServiceIntent, connection, BIND_AUTO_CREATE)
+        if (mBleService == null) {
+            bindService(gattServiceIntent, bleConnection, BIND_AUTO_CREATE)
         } else {
             Log.i(TAG, "Re-initializing bound service")
-            mService?.initialize(mBluetoothDevice!!)
+            mBleService?.initialize(mBluetoothDevice!!)
         }
         mConnectButton?.isEnabled = false
     }
 
     private fun connectToBluetooth() {
         val address = getLastBleDevice()
-        if (address != null) {
-            Log.i(TAG, "Bluetooth connecting to last device @ " + address);
-            val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
-            val device = bluetoothManager.getAdapter().getRemoteDevice(address)
-            if (device.bondState == BluetoothDevice.BOND_BONDED) {
-                bindBleService(device)
-                return
-            }
-        }
+//        if (address != null) {
+//            Log.i(TAG, "Bluetooth connecting to last device @ " + address);
+//            val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
+//            val device = bluetoothManager.getAdapter().getRemoteDevice(address)
+//            if (device.bondState == BluetoothDevice.BOND_BONDED) {
+//                bindBleService(device)
+//                return
+//            }
+//        }
         startBluetoothConnectActivity()
+    }
+
+    private fun bindUsbService() {
+        Log.i(TAG, "Bind to USB Service")
+        val intent = Intent(this, UsbService::class.java)
+        if (mUsbService == null) {
+            bindService(intent, usbConnection, BIND_AUTO_CREATE)
+        } else {
+            Log.i(TAG, "Re-initializing bound service")
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -393,16 +545,6 @@ class MainActivity : AppCompatActivity() {
         }
         if (requestCode == REQUEST_CONNECT_USB) {
             if (resultCode == RESULT_OK) {
-                if (mCallsign != null) mTransmitButton!!.isEnabled = true
-                mDeviceTextView!!.text = data!!.getStringExtra("name")
-                mConnectButton?.isActivated = true
-                mConnectButton?.text = getString(R.string.disconnect_label)
-                mConnectButton?.isEnabled = false
-                try {
-                    startPlayer(true)
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
             }
         }
     }
@@ -416,8 +558,19 @@ class MainActivity : AppCompatActivity() {
         return intentFilter
     }
 
+    private fun makeUsbIntentFilter(): IntentFilter? {
+        val intentFilter = IntentFilter()
+        intentFilter.addAction(UsbService.ACTION_USB_READY)
+        intentFilter.addAction(UsbService.ACTION_NO_USB);
+        intentFilter.addAction(UsbService.ACTION_USB_NOT_SUPPORTED);
+        intentFilter.addAction(UsbService.ACTION_USB_PERMISSION)
+        intentFilter.addAction(UsbService.ACTION_USB_DETACHED)
+        intentFilter.addAction(UsbService.ACTION_USB_ATTACHED)
+        return intentFilter
+    }
+
     companion object {
-        private val TAG = MainActivity::class.java.simpleName
+        private val TAG = MainActivity::class.java.name
         private const val REQUEST_CONNECT_BT = 1
         private const val REQUEST_CONNECT_USB = 2
         private const val REQUEST_PERMISSIONS = 3
