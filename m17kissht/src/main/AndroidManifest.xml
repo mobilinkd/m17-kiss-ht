@@ -33,6 +33,6 @@
                 android:resource="@xml/device_filter" />
         </activity>
         <service android:name="com.mobilinkd.m17kissht.bluetooth.BluetoothLEService" />
-        <service android:name="com.mobilinkd.m17kissht.usb.UsbService" android:enabled="true" />
+        <service android:name="com.mobilinkd.m17kissht.usb.UsbService" />
     </application>
 </manifest>

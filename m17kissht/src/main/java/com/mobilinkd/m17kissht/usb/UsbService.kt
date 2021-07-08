@@ -10,10 +10,8 @@ import android.hardware.usb.UsbManager
 import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
-import android.os.Message
 import android.util.Log
 import com.felhr.usbserial.UsbSerialDevice
-import com.felhr.usbserial.UsbSerialInterface
 import com.felhr.usbserial.UsbSerialInterface.*
 
 
@@ -33,7 +31,7 @@ class UsbService : Service() {
 
     private val mBinder: IBinder = LocalBinder()
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(intent: Intent?): IBinder {
         Log.i(TAG, "onBind")
         return mBinder
     }
@@ -45,8 +43,8 @@ class UsbService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return START_NOT_STICKY
         Log.i(TAG, "Service started")
+        return super.onStartCommand(intent, flags, startId)
     }
 
     override fun onDestroy() {
@@ -111,7 +109,7 @@ class UsbService : Service() {
 
     private fun attachDevice() {
         val deviceList: Map<String, UsbDevice?> = mUsbManager!!.deviceList
-        for ((key, value) in deviceList) {
+        for ((_, value) in deviceList) {
             if (value != null && attachSupportedDevice(value)) {
                 return
             }
@@ -125,25 +123,11 @@ class UsbService : Service() {
         }
     }
 
-    private fun setFilter() {
-    }
-
-    private fun requestUserPermission() {
-        Log.d(TAG,"requestUserPermission(%X:%X)".format(
-                mUsbDevice!!.getVendorId(),
-                mUsbDevice!!.getProductId()
-            )
-        )
-        val mPendingIntent = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION), 0)
-        mUsbManager?.requestPermission(mUsbDevice, mPendingIntent)
-    }
-
     private fun connectUsb() {
         Log.d(TAG, "connectUsb() invoked")
         object : Thread() {
             override fun run() {
                 Log.d(TAG, "Connect USB thread running")
-                val resultMsg = Message()
                 mSerialDevice = UsbSerialDevice.createUsbSerialDevice(mUsbDevice, mConnection)
                 if (mSerialDevice == null || !mSerialDevice!!.open()) {
                     Log.e(TAG, "failed to open $mDeviceName")
@@ -181,8 +165,6 @@ class UsbService : Service() {
         const val ACTION_USB_PERMISSION = "com.mobilinkd.m17kissht.USB_PERMISSION"
         const val ACTION_USB_NOT_SUPPORTED = "com.mobilinkd.m17kissht.USB_NOT_SUPPORTED"
         const val ACTION_NO_USB = "com.mobilinkd.m17kissht.NO_USB"
-        const val ACTION_USB_PERMISSION_GRANTED = "com.mobilinkd.m17kissht.USB_PERMISSION_GRANTED"
-        const val ACTION_USB_PERMISSION_NOT_GRANTED = "com.mobilinkd.m17kissht.USB_PERMISSION_NOT_GRANTED"
         const val ACTION_USB_DISCONNECTED = "com.mobilinkd.m17kissht.USB_DISCONNECTED"
 
         const val USB_DEVICE_NAME = "com.mobilinkd.m17kissht.USB_DEVICE_NAME"
@@ -194,8 +176,8 @@ class UsbService : Service() {
         // Connection parameters -- Required values for NucleoTNC
         private const val USB_BAUD_RATE = 38400
         private const val USB_DATA_BITS = 8
-        private const val USB_STOP_BITS = UsbSerialInterface.STOP_BITS_1
-        private const val USB_PARITY = UsbSerialInterface.PARITY_NONE
+        private const val USB_STOP_BITS = STOP_BITS_1
+        private const val USB_PARITY = PARITY_NONE
 
         var SERVICE_CONNECTED = false
     }

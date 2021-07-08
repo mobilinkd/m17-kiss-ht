@@ -11,9 +11,15 @@
     <string name="state_label_receive">RX</string>
     <string name="state_label_transmit">TX</string>
     <string name="state_label_idle">IDLE</string>
+    <string name="state_label_stop">STOP</string>
     <string name="bt_not_enabled">Bluetooth not enabled. Only USB devices can be connected.</string>
 
     <!-- Preference Keys -->
     <string name="ble_device_key">BLE Device</string>
     <string name="call_sign">Call Sign</string>
+
+    <!-- Notification Channel -->
+    <string name="channel_name">M17</string>
+    <string name="channel_description">M17 Notifications</string>
+
 </resources>

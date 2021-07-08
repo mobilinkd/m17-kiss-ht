@@ -4,36 +4,20 @@ import android.app.Service
 import android.bluetooth.*
 import android.content.Intent
 import android.os.Binder
+import android.os.Handler
 import android.os.IBinder
 import android.util.Log
 import java.util.*
 
-
-const val ACTION_GATT_CONNECTED = "com.mobilinkd.m17kissht.bluetooth.ACTION_GATT_CONNECTED"
-const val ACTION_GATT_DISCONNECTED = "com.mobilinkd.m17kissht.bluetooth.ACTION_GATT_DISCONNECTED"
-const val ACTION_GATT_SERVICES_DISCOVERED = "com.mobilinkd.m17kissht.bluetooth.ACTION_GATT_SERVICES_DISCOVERED"
-const val ACTION_GATT_SERVICE_DISCOVERY_FAILED = "com.mobilinkd.m17kissht.bluetooth.ACTION_GATT_SERVICE_DISCOVERY_FAILED"
-const val ACTION_DATA_AVAILABLE = "com.mobilinkd.m17kissht.bluetooth.ACTION_DATA_AVAILABLE"
 const val EXTRA_DATA = "com.mobilinkd.m17kissht.bluetooth.EXTRA_DATA"
 
 private const val STATE_DISCONNECTED = 0
 private const val STATE_CONNECTING = 1
 private const val STATE_CONNECTED = 2
 
+
 // A service that interacts with the BLE device via the Android BLE API.
 class BluetoothLEService : Service() {
-
-    private val TNC_SERVICE_UUID = UUID.fromString("00000001-ba2a-46c9-ae49-01b0961f68bb")
-    private val TNC_SERVICE_TX_UUID = UUID.fromString("00000002-ba2a-46c9-ae49-01b0961f68bb")
-    private val TNC_SERVICE_RX_UUID = UUID.fromString("00000003-ba2a-46c9-ae49-01b0961f68bb")
-    private val CONFIG_DESCRIPTOR_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
-
-    private val D = true
-    private val TAG = BluetoothLEService::class.java.name
-
-    private var mBluetoothManager: BluetoothManager? = null
-    private var mBluetoothAdapter: BluetoothAdapter? = null
-    private val mBluetoothDeviceAddress: String? = null
 
     private var bluetoothDevice: BluetoothDevice? = null
     private var connectionState = STATE_DISCONNECTED
@@ -42,10 +26,11 @@ class BluetoothLEService : Service() {
     private var txCharacteristic: BluetoothGattCharacteristic? = null
     var enabled: Boolean = true
     private var bluetoothGatt: BluetoothGatt? = null
+    private var mHandler: Handler? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return super.onStartCommand(intent, flags, startId)
         Log.i(TAG, "Service started")
+        return super.onStartCommand(intent, flags, startId)
     }
 
     // Various callback methods defined by the BLE API.
@@ -59,20 +44,20 @@ class BluetoothLEService : Service() {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     connectionState = STATE_CONNECTED
-                    broadcastUpdate(ACTION_GATT_CONNECTED)
+                    mHandler?.obtainMessage(GATT_CONNECTED)?.sendToTarget()
                     Log.i(TAG, "Connected to GATT server.")
                     Log.i(TAG, "Attempting to start service discovery")
-                    gatt?.discoverServices()
+                    gatt.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     connectionState = STATE_DISCONNECTED
                     Log.i(TAG, "Disconnected from GATT server (status = $status).")
                     bluetoothGatt?.close()
                     bluetoothGatt = null
-                    tncService = null;
+                    tncService = null
                     rxCharacteristic = null
                     txCharacteristic = null
-                    broadcastUpdate(ACTION_GATT_DISCONNECTED)
+                    mHandler?.obtainMessage(GATT_DISCONNECTED)?.sendToTarget()
                 }
             }
         }
@@ -88,7 +73,7 @@ class BluetoothLEService : Service() {
                 }
                 else -> {
                     Log.e(TAG, "Service discovery failed: $status")
-                    broadcastUpdate(ACTION_GATT_SERVICE_DISCOVERY_FAILED)
+                    mHandler?.obtainMessage(GATT_SERVICE_DISCOVERY_FAILED)?.sendToTarget()
                 }
             }
         }
@@ -101,7 +86,7 @@ class BluetoothLEService : Service() {
         ) {
             when (status) {
                 BluetoothGatt.GATT_SUCCESS -> {
-                    broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic)
+                    sendUpdate(characteristic)
                 }
             }
         }
@@ -111,7 +96,7 @@ class BluetoothLEService : Service() {
                 gatt: BluetoothGatt,
                 characteristic: BluetoothGattCharacteristic
         ) {
-            broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic)
+            sendUpdate(characteristic)
         }
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
@@ -149,43 +134,35 @@ class BluetoothLEService : Service() {
             }
             bluetoothGatt?.writeDescriptor(descriptor)
             Log.i(TAG, "KISS TNC Service RX notification enabled")
-            broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED)
+            mHandler?.obtainMessage(GATT_SERVICES_DISCOVERED)?.sendToTarget()
 
-            txCharacteristic?.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE)
+            txCharacteristic?.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
         }
     }
 
-    private fun broadcastUpdate(action: String) {
-        var intent = Intent(action)
-        sendBroadcast(intent)
-    }
+//    fun ByteArray.toHexString() = joinToString("") { "%02x".format(it) }
 
-    fun ByteArray.toHexString() = joinToString("") { "%02x".format(it) }
-
-    private fun broadcastUpdate(action: String, characteristic: BluetoothGattCharacteristic) {
-        val intent = Intent(action)
+    private fun sendUpdate(characteristic: BluetoothGattCharacteristic) {
 
         when (characteristic.uuid) {
             TNC_SERVICE_RX_UUID -> {
-                // Log.d(TAG, "Received KISS data: " + characteristic.value.toHexString())
-                intent.putExtra(EXTRA_DATA, characteristic.value)
+                mHandler?.obtainMessage(DATA_RECEIVED, characteristic.value)?.sendToTarget()
             }
             else -> {
                 // For all other profiles, writes the data formatted in HEX.
                 Log.d(TAG, "Unexpected characteristic: " + characteristic.uuid)
             }
         }
-        sendBroadcast(intent)
     }
 
     fun write(data: ByteArray) : Boolean
     {
-        if (txCharacteristic != null && bluetoothGatt!= null) {
+        return if (txCharacteristic != null && bluetoothGatt!= null) {
             txCharacteristic!!.value = data
-            return bluetoothGatt!!.writeCharacteristic(txCharacteristic!!)
+            bluetoothGatt!!.writeCharacteristic(txCharacteristic!!)
         } else {
             Log.w(TAG, "write called while not connected")
-            return false
+            false
         }
     }
 
@@ -198,7 +175,7 @@ class BluetoothLEService : Service() {
             get() = this@BluetoothLEService
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(intent: Intent?): IBinder {
         return mBinder
     }
 
@@ -217,9 +194,26 @@ class BluetoothLEService : Service() {
      *
      * @return Return true if the initialization is successful.
      */
-    fun initialize(device: BluetoothDevice) {
+    fun initialize(device: BluetoothDevice, handler: Handler) {
         bluetoothDevice = device
+        mHandler = handler
         bluetoothGatt = bluetoothDevice!!.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         connectionState = STATE_CONNECTING
+    }
+
+    companion object {
+        private const val D = true
+        private val TAG = BluetoothLEService::class.java.name
+
+        private val TNC_SERVICE_UUID = UUID.fromString("00000001-ba2a-46c9-ae49-01b0961f68bb")
+        private val TNC_SERVICE_TX_UUID = UUID.fromString("00000002-ba2a-46c9-ae49-01b0961f68bb")
+        private val TNC_SERVICE_RX_UUID = UUID.fromString("00000003-ba2a-46c9-ae49-01b0961f68bb")
+        private val CONFIG_DESCRIPTOR_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+
+        const val DATA_RECEIVED = 1
+        const val GATT_CONNECTED = 2
+        const val GATT_SERVICES_DISCOVERED = 3
+        const val GATT_SERVICE_DISCOVERY_FAILED = 4
+        const val GATT_DISCONNECTED = 5
     }
 }
