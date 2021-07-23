@@ -161,7 +161,7 @@ class MainActivity : AppCompatActivity() {
         mConnectButton = findViewById(R.id.connectButton)
         mConnectButton!!.setOnClickListener(onConnectListener)
         mBuildVersionTextView = findViewById(R.id.buildVersionTextView)
-        mBuildVersionTextView!!.text = BuildConfig.VERSION_NAME
+        mBuildVersionTextView!!.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
 
         mCallsign = getLastCallsign()
         if (mCallsign != null) {
