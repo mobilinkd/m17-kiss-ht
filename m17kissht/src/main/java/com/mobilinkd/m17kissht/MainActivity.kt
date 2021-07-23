@@ -42,6 +42,7 @@ class MainActivity : AppCompatActivity() {
     private var mIsActive = false
     private var mDeviceTextView: TextView? = null
     private var mStatusTextView: TextView? = null
+    private var mBuildVersionTextView: TextView? = null
     private var mAudioLevelBar: ProgressBar? = null
     private var mEditCallsign: TextView? = null
     private var mReceivingCallsign: TextView? = null
@@ -100,7 +101,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 BluetoothLEService.GATT_CONNECTED -> {
                     Log.i(TAG, "GATT connected")
-                    mDeviceTextView!!.text = mBluetoothDevice?.name
+                    mDeviceTextView!!.text = mBluetoothDevice!!.name
                     mConnectButton?.isActivated = true
                     mConnectButton?.isEnabled = true
                 }
@@ -115,6 +116,7 @@ class MainActivity : AppCompatActivity() {
                             acquire()
                         }
                     }
+                    backgroundNotification(mBluetoothDevice!!.name)
                     try {
                         startPlayer(false)
                     } catch (e: IOException) {
@@ -124,6 +126,7 @@ class MainActivity : AppCompatActivity() {
                 BluetoothLEService.GATT_DISCONNECTED -> {
                     Log.i(TAG, "GATT disconnected")
                     mWakeLock?.release()
+                    backgroundCancelled();
                     mWakeLock = null
                     if (mAudioPlayer != null) {
                         Toast.makeText(this@MainActivity, "Bluetooth disconnected", Toast.LENGTH_SHORT).show()
@@ -157,6 +160,8 @@ class MainActivity : AppCompatActivity() {
         mTransmitButton!!.setOnTouchListener(onBtnPttTouchListener)
         mConnectButton = findViewById(R.id.connectButton)
         mConnectButton!!.setOnClickListener(onConnectListener)
+        mBuildVersionTextView = findViewById(R.id.buildVersionTextView)
+        mBuildVersionTextView!!.text = BuildConfig.VERSION_NAME
 
         mCallsign = getLastCallsign()
         if (mCallsign != null) {
@@ -290,6 +295,7 @@ class MainActivity : AppCompatActivity() {
                     mDeviceTextView?.text = getString(R.string.not_connected_label)
                     mWakeLock?.release()
                     mWakeLock = null
+                    backgroundCancelled()
                     mUsbService?.disconnect()
                 }
                 UsbService.ACTION_USB_PERMISSION -> {
@@ -325,6 +331,7 @@ class MainActivity : AppCompatActivity() {
                             acquire()
                         }
                     }
+                    backgroundNotification(deviceName!!)
                     try {
                         startPlayer(true)
                     } catch (e: IOException) {
@@ -394,8 +401,7 @@ class MainActivity : AppCompatActivity() {
 
         var builder = NotificationCompat.Builder(this, M17_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_logo)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText("RX: $callsign")
+            .setContentTitle(callsign)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setTimeoutAfter(10000)
@@ -414,6 +420,29 @@ class MainActivity : AppCompatActivity() {
         with(NotificationManagerCompat.from(this)) {
             // notificationId is a unique int for each notification that you must define
             cancel(CALLSIGN_NOTIFICATION_ID)
+        }
+    }
+
+    private fun backgroundNotification(device: String) {
+
+        var builder = NotificationCompat.Builder(this, M17_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_logo)
+            .setContentTitle("Connected to $device")
+            .setContentText("M17 is running in the background")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(Notification.CATEGORY_PROGRESS)
+
+        with(NotificationManagerCompat.from(this)) {
+            // notificationId is a unique int for each notification that you must define
+            notify(RUNNING_NOTIFICATION_ID, builder.build())
+        }
+        Log.d(TAG, "background notification sent")
+    }
+
+    private fun backgroundCancelled() {
+        with(NotificationManagerCompat.from(this)) {
+            // notificationId is a unique int for each notification that you must define
+            cancel(RUNNING_NOTIFICATION_ID)
         }
     }
 
