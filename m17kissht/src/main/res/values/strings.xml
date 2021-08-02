@@ -14,6 +14,10 @@
     <string name="state_label_stop">STOP</string>
     <string name="bt_not_enabled">Bluetooth not enabled. Only USB devices can be connected.</string>
     <string name="version_label">Version %s</string>
+    <string name="bert_receiver_label">BERT Receiver</string>
+    <string name="bert_bits">BITS %d</string>
+    <string name="bert_errors">ERRORS %d</string>
+    <string name="bert_frames">FRAMES %d</string>
 
     <!-- Preference Keys -->
     <string name="ble_device_key">BLE Device</string>

@@ -17,7 +17,7 @@ public class KissProcessor {
     private final byte KISS_TFEND = (byte)0xdc;
     private final byte KISS_TFESC = (byte)0xdd;
 
-    private final byte KISS_CMD_DATA = (byte)0x20;
+    private final byte KISS_CMD_DATA = (byte)0x00;
     private final byte KISS_CMD_TX_DELAY = (byte)0x01;
     private final byte KISS_CMD_P = (byte)0x02;
     private final byte KISS_CMD_SLOT_TIME = (byte)0x03;
@@ -25,6 +25,7 @@ public class KissProcessor {
     private final byte KISS_CMD_NOCMD = (byte)0x80;
 
     private final byte KISS_MODEM_STREAMING = (byte)0x20;   // This is the streaming modem ID.
+    private final byte KISS_MODEM_BERT = (byte)0x30;   // This is the streaming modem ID.
 
     private enum KissState {
         VOID,
@@ -105,7 +106,7 @@ public class KissProcessor {
                     }
                     break;
                 case GET_CMD:
-                    if (b == KISS_CMD_DATA) {
+                    if ((b & 7) == KISS_CMD_DATA) {
                         _kissCmd = b;
                         _kissState = KissState.GET_DATA;
                     } else if (b != KISS_FEND) {
@@ -116,8 +117,10 @@ public class KissProcessor {
                     if (b == KISS_FESC) {
                         _kissState = KissState.ESCAPE;
                     } else if (b == KISS_FEND) {
-                        if (_kissCmd == KISS_CMD_DATA) {
+                        if (_kissCmd == KISS_MODEM_STREAMING) {
                             _callback.onReceive(Arrays.copyOf(_inputKissBuffer, _inputKissBufferPos));
+                        } else if (_kissCmd == KISS_MODEM_BERT) {
+                            _callback.onReceiveBERT(Arrays.copyOf(_inputKissBuffer, _inputKissBufferPos));
                         }
                         resetState();
                     } else {

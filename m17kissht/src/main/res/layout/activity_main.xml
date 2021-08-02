@@ -25,7 +25,7 @@
         android:layout_width="0dp"
         android:layout_height="72dp"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="16dp"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="16dp"
         android:background="@drawable/button_transmit"
@@ -38,7 +38,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.52"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textViewReceiving" />
+        app:layout_constraintTop_toBottomOf="@+id/berFrameCountTextView" />
 
     <EditText
         android:id="@+id/editTextCallSign"
@@ -137,5 +137,73 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />
+
+    <androidx.constraintlayout.widget.Group
+        android:id="@+id/group"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        tools:layout_editor_absoluteX="205dp"
+        tools:layout_editor_absoluteY="334dp" />
+
+    <TextView
+        android:id="@+id/berErrorCountTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="20dp"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:text="Errors 123,456"
+        android:textSize="16sp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textViewReceivedCallsign" />
+
+    <TextView
+        android:id="@+id/berBitCountTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="12dp"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:text="Bits 123,456,789"
+        android:textSize="16sp"
+        app:layout_constraintBottom_toBottomOf="@+id/berErrorCountTextView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/berErrorCountTextView" />
+
+    <TextView
+        android:id="@+id/berFrameCountTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:text="Frames 16,384"
+        android:textSize="16sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/berRateTextView" />
+
+    <TextView
+        android:id="@+id/berRateTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:lines="1"
+        android:text="0.999 999 999"
+        android:textColor="@android:color/holo_orange_light"
+        android:textSize="48sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/berBitCountTextView" />
+
+    <TextView
+        android:id="@+id/bertReceiverTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/bert_receiver_label"
+        android:textSize="18sp"
+        app:layout_constraintBottom_toBottomOf="@+id/berBitCountTextView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/berBitCountTextView" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

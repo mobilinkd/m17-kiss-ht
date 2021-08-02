@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
-    <uses-feature android:name="android.software.companion_device_setup"/>
+    <uses-feature android:name="android.software.companion_device_setup" android:required="true"/>
 
     <application
         android:allowBackup="true"
@@ -35,5 +35,9 @@
         </activity>
         <service android:name="com.mobilinkd.m17kissht.bluetooth.BluetoothLEService" />
         <service android:name="com.mobilinkd.m17kissht.usb.UsbService" />
+
+        <meta-data
+            android:name="preloaded_fonts"
+            android:resource="@array/preloaded_fonts" />
     </application>
 </manifest>

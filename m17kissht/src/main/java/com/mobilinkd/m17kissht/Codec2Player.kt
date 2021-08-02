@@ -18,10 +18,12 @@ import java.io.IOException
 import java.nio.BufferOverflowException
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
+import java.time.Instant
 import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.LinkedTransferQueue
 import java.util.concurrent.TimeUnit
+import kotlin.time.TimeMark
 
 
 class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, callsign: String) : Thread() {
@@ -45,6 +47,9 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     private var _recordAudioBuffer: ShortArray? = null
     private var _recordAudioEncodedBuffer: CharArray? = null
     private var _receiveQueue = LinkedBlockingQueue<ByteArray>()
+    private var _prbs = PRBS9()
+    private var _bertFrameCount = 0
+    private var _lastBertTest = System.currentTimeMillis()
 
     // loopback mode
     private var _isLoopbackMode = false
@@ -165,6 +170,41 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         override fun onReceiveLinkSetup(callsign: String) {
             _onPlayerStateChanged.obtainMessage(PLAYER_CALLSIGN_RECEIVED, 0, 0, callsign).sendToTarget()
         }
+
+        override fun onReceiveBERT(frame: ByteArray) {
+
+            assert(frame.size == 25)
+
+            if (_bertFrameCount == 0) {
+                Log.i(TAG, "onReceiveBERT")
+            }
+
+            if (System.currentTimeMillis() - _lastBertTest > 1000) {
+                _prbs.reset()
+                _bertFrameCount = 0
+            }
+
+            _bertFrameCount += 1
+            _lastBertTest = System.currentTimeMillis()
+
+            for (i in frame.indices) {
+                var bits = frame[i].toInt() and 0xFF
+                var min_bit = if (i == 24) 3 else 0
+
+                for (j in 7 downTo min_bit) {
+                    if (bits and (1 shl j) != 0) {
+                        _prbs.validate(1);
+                    } else {
+                        _prbs.validate(0);
+                    }
+                }
+            }
+
+            if (_prbs.sync()) {
+                _onPlayerStateChanged.obtainMessage(PLAYER_BERT_RECEIVED, _prbs.bits(), _prbs.errors(), _bertFrameCount)
+                    .sendToTarget()
+            }
+        }
     }
     private val _kissCallback: KissCallback = object : KissCallback() {
         @Throws(IOException::class)
@@ -174,6 +214,10 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
 
         override fun onReceive(data: ByteArray) {
             _m17Processor!!.receive(data)
+        }
+
+        override fun onReceiveBERT(data: ByteArray) {
+            _m17Processor!!.receiveBERT(data)
         }
     }
 
@@ -374,6 +418,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         var PLAYER_RX_LEVEL = 5
         var PLAYER_TX_LEVEL = 6
         var PLAYER_CALLSIGN_RECEIVED = 7
+        var PLAYER_BERT_RECEIVED = 8
         const val audioMinLevel = -70
         const val audioHighLevel = -15
     }

@@ -31,13 +31,14 @@ import com.mobilinkd.m17kissht.usb.UsbService
 import com.ustadmobile.codec2.Codec2
 import java.io.IOException
 import java.util.*
-
+import kotlin.concurrent.schedule
 
 class MainActivity : AppCompatActivity() {
     private val _requiredPermissions = arrayOf(
         Manifest.permission.BLUETOOTH,
         Manifest.permission.RECORD_AUDIO,
-        Manifest.permission.WAKE_LOCK
+        Manifest.permission.WAKE_LOCK,
+        Manifest.permission.ACCESS_FINE_LOCATION
     )
     private var mIsActive = false
     private var mDeviceTextView: TextView? = null
@@ -56,6 +57,13 @@ class MainActivity : AppCompatActivity() {
     private var mUsbService: UsbService? = null
 
     private var mWakeLock: PowerManager.WakeLock? = null
+
+    private var mBertReceiverTextView: TextView? = null
+    private var mBerErrorCountTextView: TextView? = null
+    private var mBerBitCountTextView: TextView? = null
+    private var mBerFrameCountTextView: TextView? = null
+    private var mBerRateTextView: TextView? = null
+    private var mBerTimer: Timer? = null
 
     /** Defines callbacks for service binding, passed to bindService()  */
     private val bleConnection = object : ServiceConnection {
@@ -91,6 +99,39 @@ class MainActivity : AppCompatActivity() {
             Log.i(TAG, "usbConnection.onServiceDisconnected: className -> " + className.className)
             mUsbService = null
         }
+    }
+
+    private fun initBerWidgets() {
+        mBertReceiverTextView = findViewById(R.id.bertReceiverTextView)
+        mBerErrorCountTextView = findViewById(R.id.berErrorCountTextView)
+        mBerBitCountTextView = findViewById(R.id.berBitCountTextView)
+        mBerFrameCountTextView = findViewById(R.id.berFrameCountTextView)
+        mBerRateTextView = findViewById(R.id.berRateTextView)
+
+        hideBerWidgets()
+    }
+
+    private fun hideBerWidgets() {
+        mBertReceiverTextView!!.visibility = View.INVISIBLE
+        mBerErrorCountTextView!!.visibility = View.INVISIBLE
+        mBerBitCountTextView!!.visibility = View.INVISIBLE
+        mBerFrameCountTextView!!.visibility = View.INVISIBLE
+        mBerRateTextView!!.visibility = View.INVISIBLE
+    }
+
+    private fun showBerWidgets() {
+        mBertReceiverTextView!!.visibility = View.VISIBLE
+        mBerErrorCountTextView!!.visibility = View.VISIBLE
+        mBerBitCountTextView!!.visibility = View.VISIBLE
+        mBerFrameCountTextView!!.visibility = View.VISIBLE
+        mBerRateTextView!!.visibility = View.VISIBLE
+
+        if (mBerTimer != null) {
+            mBerTimer!!.cancel()
+            mBerTimer = null
+        }
+        mBerTimer = Timer()
+        mBerTimer!!.schedule(3000) { hideBerWidgets() }
     }
 
     private val bleHandler: Handler = object : Handler(Looper.getMainLooper()) {
@@ -162,6 +203,7 @@ class MainActivity : AppCompatActivity() {
         mConnectButton!!.setOnClickListener(onConnectListener)
         mBuildVersionTextView = findViewById(R.id.buildVersionTextView)
         mBuildVersionTextView!!.text = getString(R.string.version_label, BuildConfig.VERSION_NAME)
+        initBerWidgets()
 
         mCallsign = getLastCallsign()
         if (mCallsign != null) {
@@ -467,8 +509,19 @@ class MainActivity : AppCompatActivity() {
                 mAudioLevelBar!!.progress = msg.arg1 - Codec2Player.audioMinLevel
             } else if (msg.what == Codec2Player.PLAYER_CALLSIGN_RECEIVED) {
                 receivedCallsign(msg.obj as String)
+            } else if (msg.what == Codec2Player.PLAYER_BERT_RECEIVED) {
+                receivedBERT(msg.arg1, msg.arg2, msg.obj as Int)
             }
         }
+    }
+
+    private fun receivedBERT(receivedBits: Int, errorBits: Int, frameCount: Int) {
+        if (receivedBits == 0) return;
+        mBerBitCountTextView!!.text = getString(R.string.bert_bits, receivedBits)
+        mBerErrorCountTextView!!.text = getString(R.string.bert_errors, errorBits)
+        mBerFrameCountTextView!!.text = getString(R.string.bert_frames, frameCount)
+        mBerRateTextView!!.text = String.format("%,.9f", errorBits.toFloat() / receivedBits.toFloat())
+        showBerWidgets()
     }
 
     @Throws(IOException::class)

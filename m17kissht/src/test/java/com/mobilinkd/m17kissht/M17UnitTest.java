@@ -29,6 +29,11 @@ public class M17UnitTest {
         protected void onReceiveAudio(byte[] data) {
 
         }
+
+        @Override
+        protected void onReceiveBERT(byte[] data) {
+
+        }
     };
 
     @Test

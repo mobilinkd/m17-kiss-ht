@@ -214,4 +214,8 @@ public class M17Processor {
             mCallback.onReceiveAudio(Arrays.copyOfRange(frame, 8,24));
         }
     }
+
+    public void receiveBERT(byte[] frame) {
+        mCallback.onReceiveBERT(frame);
+    }
 }
