@@ -90,7 +90,7 @@ public class KissProcessor {
     public void send(byte [] frame) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream(frame.length * 2);
         output.write(KISS_FEND);
-        output.write(KISS_CMD_DATA);
+        output.write(KISS_MODEM_STREAMING);
         escape(frame, output);
         output.write(KISS_FEND);
         _callback.onSend(output.toByteArray());
