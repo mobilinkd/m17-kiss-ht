@@ -7,6 +7,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -177,11 +178,13 @@ class MainActivity : AppCompatActivity() {
                     mConnectButton?.isEnabled = true
                     mDeviceTextView?.text = getString(R.string.not_connected_label)
                     mTransmitButton?.isEnabled = false
+                    if (mConnectButton!!.isChecked) {
+                        reconnectToBluetooth()
+                    }
                 }
             }
         }
     }
-
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -334,6 +337,7 @@ class MainActivity : AppCompatActivity() {
                     mConnectButton?.isActivated = false
                     mConnectButton?.text = getString(R.string.connect_label)
                     mConnectButton?.isEnabled = true
+                    mConnectButton?.isChecked = false
                     mDeviceTextView?.text = getString(R.string.not_connected_label)
                     mWakeLock?.release()
                     mWakeLock = null
@@ -598,6 +602,19 @@ class MainActivity : AppCompatActivity() {
             mBleService?.initialize(mBluetoothDevice!!, bleHandler)
         }
         mConnectButton?.isEnabled = false
+    }
+
+    private fun reconnectToBluetooth() {
+        val address = getLastBleDevice()
+        if (address != null) {
+            Log.i(TAG, "Bluetooth connecting to last device @ " + address);
+            val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
+            val device = bluetoothManager.getAdapter().getRemoteDevice(address)
+            if (device.bondState == BluetoothDevice.BOND_BONDED) {
+                bindBleService(device)
+                return
+            }
+        }
     }
 
     private fun connectToBluetooth() {
