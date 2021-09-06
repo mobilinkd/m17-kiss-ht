@@ -1,10 +1,14 @@
 package com.mobilinkd.m17kissht
 
+import android.Manifest
+import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.media.*
 import android.os.Handler
 import android.os.Message
 import android.os.Process
 import android.util.Log
+import androidx.core.app.ActivityCompat
 import com.felhr.usbserial.UsbSerialDevice
 import com.felhr.usbserial.UsbSerialInterface.UsbReadCallback
 import com.mobilinkd.m17kissht.bluetooth.BluetoothLEService
@@ -26,14 +30,8 @@ import java.util.concurrent.TimeUnit
 import kotlin.time.TimeMark
 
 
+@SuppressLint("MissingPermission") // Handled in MainActivity.
 class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, callsign: String) : Thread() {
-    private val AUDIO_SAMPLE_RATE = 8000
-    private val SLEEP_IDLE_DELAY_MS = 20
-    private val POST_PLAY_DELAY_MS = 400
-    private val RX_TIMEOUT = 100
-    private val TX_TIMEOUT = 2000
-    private val TX_DELAY_10MS_UNITS: Byte = 8
-    private val RX_BUFFER_SIZE = 8192
     private var _codec2Con: Long = 0
     private var _audioBufferSize = 0
     private var _audioEncodedBufferSize = 0
@@ -50,6 +48,8 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     private var _prbs = PRBS9()
     private var _bertFrameCount = 0
     private var _lastBertTest = System.currentTimeMillis()
+    private var _rssi = 100;
+    private var _squelch = 100;
 
     // loopback mode
     private var _isLoopbackMode = false
@@ -82,8 +82,21 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         setCodecModeInternal(codecMode)
     }
 
-    fun setCallsign(callsign: String?) {
+    fun setCallsign(callsign: String) {
         _m17Processor!!.setCallsign(callsign)
+    }
+
+    fun setDestination(callsign: String) {
+        _m17Processor!!.setDestination(callsign)
+    }
+
+    fun setChannelAccessNumber(can: Int) {
+        _m17Processor!!.setChannelAccessNumber(can)
+    }
+
+    fun setSquelch(sql: Int) {
+        // Convert 0 to 100 squelch level to 0 to 200 as the RSSI limit.
+        _squelch = sql * 2;
     }
 
     fun startPlayback() {
@@ -167,6 +180,11 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
             }
         }
 
+        override fun onReceiveRSSI(value: Int) {
+            _rssi = value;
+            _onPlayerStateChanged.obtainMessage(PLAYER_RSSI_RECEIVED, value, 0).sendToTarget()
+        }
+
         override fun onReceiveLinkSetup(callsign: String) {
             _onPlayerStateChanged.obtainMessage(PLAYER_CALLSIGN_RECEIVED, 0, 0, callsign).sendToTarget()
         }
@@ -243,8 +261,13 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     }
 
     private fun decodeAndPlayAudio(data: ByteArray) {
-        Codec2.decode(_codec2Con, _playbackAudioBuffer, data)
-        _audioPlayer.write(_playbackAudioBuffer!!, 0, _audioBufferSize)
+        if (_rssi > _squelch) {
+            Codec2.decode(_codec2Con, _playbackAudioBuffer, data)
+            _audioPlayer.write(_playbackAudioBuffer!!, 0, _audioBufferSize)
+        } else {
+            _playbackAudioBuffer?.fill(0);
+            _audioPlayer.write(_playbackAudioBuffer!!, 0, _audioBufferSize)
+        }
         notifyAudioLevel(_playbackAudioBuffer, false)
     }
 
@@ -419,8 +442,16 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         var PLAYER_TX_LEVEL = 6
         var PLAYER_CALLSIGN_RECEIVED = 7
         var PLAYER_BERT_RECEIVED = 8
+        var PLAYER_RSSI_RECEIVED = 9
         const val audioMinLevel = -70
         const val audioHighLevel = -15
+        val AUDIO_SAMPLE_RATE = 8000
+        val SLEEP_IDLE_DELAY_MS = 20
+        val POST_PLAY_DELAY_MS = 400
+        val RX_TIMEOUT = 250
+        val TX_TIMEOUT = 2000
+        val TX_DELAY_10MS_UNITS: Byte = 8
+        val RX_BUFFER_SIZE = 8192
     }
 
     init {

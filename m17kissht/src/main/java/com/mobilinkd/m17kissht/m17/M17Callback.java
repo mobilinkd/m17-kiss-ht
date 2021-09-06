@@ -6,5 +6,6 @@ public abstract class M17Callback {
     abstract protected void onSend(byte[] data) throws IOException;
     abstract protected void onReceiveLinkSetup(String callsign);
     abstract protected void onReceiveAudio(byte[] frame);
+    abstract protected void onReceiveRSSI(int value);
     abstract protected void onReceiveBERT(byte[] frame);
 }

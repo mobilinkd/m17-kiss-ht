@@ -6,21 +6,31 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
+    <ImageView
+        android:id="@+id/imageView"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@drawable/ic_logo2" />
+
     <TextView
         android:id="@+id/textBtName"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
-        android:layout_marginEnd="16dp"
+        android:layout_marginEnd="8dp"
         android:text="@string/not_connected_label"
         android:textAppearance="@style/TextAppearance.AppCompat.Large"
         android:textSize="14sp"
         app:layout_constraintBottom_toBottomOf="@+id/connectButton"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/imageView"
         app:layout_constraintStart_toEndOf="@+id/connectButton"
         app:layout_constraintTop_toTopOf="@+id/connectButton" />
 
-    <androidx.appcompat.widget.AppCompatButton
+    <androidx.appcompat.widget.AppCompatToggleButton
         android:id="@+id/buttonTransmit"
         android:layout_width="0dp"
         android:layout_height="72dp"
@@ -30,8 +40,9 @@
         android:layout_marginBottom="16dp"
         android:background="@drawable/button_transmit"
         android:enabled="false"
-        android:hapticFeedbackEnabled="false"
-        android:text="@string/push_to_talk"
+        android:hapticFeedbackEnabled="true"
+        android:textOff="@string/push_to_talk"
+        android:textOn="@string/push_to_talk"
         android:textColor="#FFFFFF"
         android:textSize="24sp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -43,20 +54,104 @@
     <EditText
         android:id="@+id/editTextCallSign"
         android:layout_width="0dp"
+        android:layout_weight="42"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginTop="24dp"
-        android:layout_marginEnd="16dp"
-        android:ems="10"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:textSize="28sp"
+        android:ems="4"
         android:hint="Call Sign"
-        android:maxLength="9"
-        android:inputType="text"
-        android:singleLine="true"
         android:imeOptions="actionDone"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="1.0"
+        android:inputType="textCapCharacters"
+        android:maxLength="9"
+        android:singleLine="true"
+        android:completionThreshold="0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/linearLayout" />
+        app:layout_constraintTop_toBottomOf="@+id/RxQualityLayout" />
+
+    <AutoCompleteTextView
+        android:id="@+id/editTextDestination"
+        android:layout_width="0dp"
+        android:layout_weight="42"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:textSize="28sp"
+        android:ems="4"
+        android:hint="@string/destination_hint"
+        android:imeOptions="actionDone"
+        android:inputType="textCapCharacters"
+        android:selectAllOnFocus="true"
+        android:maxLength="9"
+        android:singleLine="true"
+        app:layout_constraintBottom_toBottomOf="@+id/editTextCallSign"
+        app:layout_constraintStart_toEndOf="@+id/editTextCallSign"
+        app:layout_constraintTop_toTopOf="@+id/editTextCallSign"
+        app:layout_constraintVertical_bias="1.0" />
+
+    <EditText
+        android:id="@+id/editChannelAccessNumber"
+        android:layout_width="0dp"
+        android:layout_weight="16"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:textSize="24sp"
+        android:ems="2"
+        android:hint="@string/can_hint"
+        android:imeOptions="actionDone"
+        android:inputType="number"
+        android:selectAllOnFocus="true"
+        android:maxLength="2"
+        android:singleLine="true"
+        app:layout_constraintBottom_toBottomOf="@+id/editTextCallSign"
+        app:layout_constraintStart_toEndOf="@+id/editTextDestination"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@+id/editTextCallSign"
+        app:layout_constraintVertical_bias="1.0" />
+
+    <TextView
+        android:id="@+id/srcLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="12dp"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:text="@string/source_label"
+        android:textSize="10sp"
+        app:layout_constraintStart_toStartOf="@+id/editTextCallSign"
+        app:layout_constraintTop_toBottomOf="@+id/editTextCallSign" />
+
+    <TextView
+        android:id="@+id/destLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="16dp"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:text="@string/destination_label"
+        android:textSize="10sp"
+        app:layout_constraintStart_toStartOf="@+id/editTextDestination"
+        app:layout_constraintBottom_toBottomOf="@+id/srcLabel"
+        app:layout_constraintTop_toTopOf="@+id/srcLabel" />
+
+    <TextView
+        android:id="@+id/canLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="16dp"
+        android:fontFamily="@font/bebas_neue_regular"
+        android:text="@string/can_label"
+        android:textSize="10sp"
+        app:layout_constraintStart_toStartOf="@+id/editChannelAccessNumber"
+        app:layout_constraintBottom_toBottomOf="@+id/srcLabel"
+        app:layout_constraintTop_toTopOf="@+id/srcLabel" />
 
     <TextView
         android:id="@+id/textViewReceiving"
@@ -98,24 +193,108 @@
 
         <TextView
             android:id="@+id/textViewState"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
+            android:layout_weight="2"
             android:text="@string/state_label_idle"
             android:visibility="visible" />
 
         <ProgressBar
             android:id="@+id/progressTxRxLevel"
             style="?android:attr/progressBarStyleHorizontal"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_weight="5"
+            android:layout_weight="7"
             android:scaleY="3"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/progressTxLevel" />
 
+        <TextView
+            android:id="@+id/textViewNone"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="50"
+            android:visibility="invisible" />
+
     </LinearLayout>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/RxQualityLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/linearLayout">
+
+        <TextView
+            android:id="@+id/textViewRf"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            app:layout_constraintHorizontal_weight="0.2"
+            android:text="@string/state_label_rf"
+            android:visibility="visible"
+            android:tooltipText="@string/squelch_seek_tooltip"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/progressRfLevel"/>
+
+        <ProgressBar
+            android:id="@+id/progressRfLevel"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:visibility="visible"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:scaleY="3"
+            app:layout_constraintHorizontal_weight="0.7"
+            app:layout_constraintTop_toTopOf="@+id/textViewSquelch"
+            app:layout_constraintBottom_toBottomOf="@+id/textViewSquelch"
+            app:layout_constraintStart_toEndOf="@+id/textViewRf"
+            app:layout_constraintEnd_toStartOf="@+id/textViewSquelch"/>
+
+        <SeekBar
+            android:id="@+id/seekSquelchLevel"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:translationZ="2dp"
+            android:scaleY="3"
+            android:progress="50"
+            android:min="0"
+            android:max="100"
+            android:visibility="visible"
+            android:background="@android:color/transparent"
+            android:foreground="@android:color/transparent"
+            android:progressTint="@android:color/transparent"
+            android:progressBackgroundTint="@android:color/transparent"
+            android:thumbTint="@android:color/darker_gray"
+            android:tooltipText="@string/squelch_seek_tooltip"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toBottomOf="@id/progressRfLevel"
+            app:layout_constraintStart_toStartOf="@id/progressRfLevel"
+            app:layout_constraintEnd_toEndOf="@id/progressRfLevel"
+            app:layout_constraintTop_toTopOf="@id/progressRfLevel"/>
+
+        <TextView
+            android:id="@+id/textViewSquelch"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            app:layout_constraintHorizontal_weight="0.1"
+            android:text="50"
+            android:visibility="visible"
+            android:tooltipText="@string/squelch_tooltip"
+            app:layout_constraintTop_toTopOf="@id/progressRfLevel"
+            app:layout_constraintBottom_toBottomOf="@id/progressRfLevel"
+            app:layout_constraintStart_toEndOf="@+id/progressRfLevel"
+            app:layout_constraintEnd_toEndOf="parent"/>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <ToggleButton
         android:id="@+id/connectButton"

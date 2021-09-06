@@ -12,16 +12,27 @@
     <string name="state_label_transmit">TX</string>
     <string name="state_label_idle">IDLE</string>
     <string name="state_label_stop">STOP</string>
+    <string name="state_label_rf">RSSI</string>
     <string name="bt_not_enabled">Bluetooth not enabled. Only USB devices can be connected.</string>
     <string name="version_label">Version %s</string>
     <string name="bert_receiver_label">BERT Receiver</string>
     <string name="bert_bits">BITS %d</string>
     <string name="bert_errors">ERRORS %d</string>
     <string name="bert_frames">FRAMES %d</string>
+    <string name="can_hint">CAN</string>
+    <string name="destination_hint">Destination</string>
+    <string name="source_label">Source</string>
+    <string name="destination_label">Destination</string>
+    <string name="can_label">CAN</string>
+    <string name="squelch_tooltip">Squelch level</string>
+    <string name="squelch_seek_tooltip">Slide to adjust squelch level</string>
+
 
     <!-- Preference Keys -->
     <string name="ble_device_key">BLE Device</string>
     <string name="call_sign">Call Sign</string>
+    <string name="channel_access_number">M17 CAN</string>
+    <string name="squelch">Squelch</string>
 
     <!-- Notification Channel -->
     <string name="channel_name">M17</string>

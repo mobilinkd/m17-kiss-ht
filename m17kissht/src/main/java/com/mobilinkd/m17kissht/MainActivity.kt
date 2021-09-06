@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.*
@@ -49,9 +48,20 @@ class MainActivity : AppCompatActivity() {
     private var mEditCallsign: TextView? = null
     private var mReceivingCallsign: TextView? = null
     private var mConnectButton: ToggleButton? = null
-    private var mTransmitButton: Button? = null
+    private var mTransmitButton: ToggleButton? = null
     private var mAudioPlayer: Codec2Player? = null
     private var mCallsign: String? = null
+
+    private var mRfLevelBar: ProgressBar? = null
+    private var mSquelchSeekBar: SeekBar? = null
+    private var mSquelchTextView: TextView? = null
+    private var mEditDestination: AutoCompleteTextView? = null
+    private var mEditCan: TextView? = null
+    private var mCan = 10
+    private var mDestination = ""
+    private var mSquelch = 50
+    private var mPttPressTime = System.currentTimeMillis();
+    private var mPttLocked = false
 
     private var mBluetoothDevice: BluetoothDevice? = null
     private var mBleService: BluetoothLEService? = null
@@ -199,6 +209,20 @@ class MainActivity : AppCompatActivity() {
         mAudioLevelBar!!.max = -Codec2Player.audioMinLevel
         mEditCallsign = findViewById(R.id.editTextCallSign)
         mEditCallsign!!.setOnEditorActionListener(onCallsignChanged)
+
+        mEditDestination = findViewById(R.id.editTextDestination)
+        mEditDestination!!.setOnEditorActionListener(onDestinationChanged)
+        mEditDestination!!.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, COMMANDS))
+        mEditCan = findViewById(R.id.editChannelAccessNumber)
+        mEditCan!!.setOnEditorActionListener(onChannelAccessNumberChanged)
+        mRfLevelBar = findViewById(R.id.progressRfLevel)
+        mRfLevelBar!!.min = 0;
+        mRfLevelBar!!.max = 255;
+        mSquelchSeekBar = findViewById(R.id.seekSquelchLevel)
+        mSquelchSeekBar?.setOnSeekBarChangeListener(onSquelchLevelChanged)
+        mSquelchSeekBar?.isEnabled = true
+        mSquelchTextView = findViewById(R.id.textViewSquelch)
+
         mReceivingCallsign = findViewById(R.id.textViewReceivedCallsign)
         mTransmitButton = findViewById(R.id.buttonTransmit)
         mTransmitButton!!.setOnTouchListener(onBtnPttTouchListener)
@@ -212,6 +236,13 @@ class MainActivity : AppCompatActivity() {
         if (mCallsign != null) {
             mEditCallsign!!.text = mCallsign
         }
+
+        mCan = getLastCAN()
+        mEditCan!!.text = mCan.toString()
+
+        mSquelch = getLastSquelch()
+        mSquelchSeekBar!!.progress = mSquelch
+        mSquelchTextView!!.text = mSquelch.toString()
     }
 
     override fun onStart() {
@@ -288,6 +319,14 @@ class MainActivity : AppCompatActivity() {
         return color
     }
 
+    private fun colorFromRSSILevel(level: Int): Int {
+        var color = Color.LTGRAY
+        if (level > 192) color = Color.GREEN
+        else if (level > 128) color = Color.YELLOW
+        else if (level > 0) color = Color.RED
+        return color
+    }
+
     private fun createNotificationChannel() {
         // Create the NotificationChannel, but only on API 26+ because
         // the NotificationChannel class is new and not in the support library
@@ -311,7 +350,7 @@ class MainActivity : AppCompatActivity() {
             if (keyEvent == null || !keyEvent.isShiftPressed) {
                 mCallsign = validateCallsign(textView.text.toString())
                 textView.text = mCallsign
-                mAudioPlayer?.setCallsign(mCallsign)
+                mAudioPlayer?.setCallsign(mCallsign!!)
                 mTransmitButton!!.isEnabled = true
                 textView.clearFocus()
                 setLastCallsign(mCallsign!!)
@@ -319,6 +358,52 @@ class MainActivity : AppCompatActivity() {
             }
         }
         false
+    }
+
+    private val onDestinationChanged = TextView.OnEditorActionListener { textView, actionId, keyEvent ->
+        if (actionId == EditorInfo.IME_ACTION_DONE ||
+            keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN && keyEvent.keyCode == KeyEvent.KEYCODE_ENTER) {
+            if (keyEvent == null || !keyEvent.isShiftPressed) {
+                mDestination = validateCallsign(textView.text.toString())
+                textView.text = mDestination
+                mAudioPlayer?.setDestination(mDestination)
+                textView.clearFocus()
+                return@OnEditorActionListener false // hide keyboard.
+            }
+        }
+        false
+    }
+
+    private val onChannelAccessNumberChanged = TextView.OnEditorActionListener { textView, actionId, keyEvent ->
+        if (actionId == EditorInfo.IME_ACTION_DONE ||
+            keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN && keyEvent.keyCode == KeyEvent.KEYCODE_ENTER) {
+            if (keyEvent == null || !keyEvent.isShiftPressed) {
+                mCan = validateCAN(textView.text.toString())
+                textView.text = mCan.toString()
+                mAudioPlayer?.setChannelAccessNumber(mCan)
+                textView.clearFocus()
+                setLastCAN(mCan)
+                return@OnEditorActionListener false // hide keyboard.
+            }
+        }
+        false
+    }
+
+    private val onSquelchLevelChanged = object: SeekBar.OnSeekBarChangeListener {
+        override fun onProgressChanged(seek: SeekBar?, progress: Int, fromUser: Boolean) {
+            mSquelchTextView?.text = progress.toString()
+        }
+        override fun onStartTrackingTouch(seek: SeekBar?) {
+            Log.d(TAG, "onStartTrackingTouch")
+        }
+        override fun onStopTrackingTouch(seek: SeekBar?) {
+            Log.d(TAG, "onStopTrackingTouch")
+            if (seek != null) {
+                mSquelch = seek!!.progress
+                mAudioPlayer?.setSquelch(mSquelch)
+                setLastSquelch(mSquelch)
+            }
+        }
     }
 
     private val usbReceiver: BroadcastReceiver = object : BroadcastReceiver() {
@@ -406,16 +491,47 @@ class MainActivity : AppCompatActivity() {
 
     private val onBtnPttTouchListener = View.OnTouchListener { v, event ->
         when (event.action) {
-            MotionEvent.ACTION_DOWN -> if (mAudioPlayer != null && mCallsign != null) mAudioPlayer!!.startRecording()
+            /*
+            The iseChecked logic seems inverted from what I would expect.  I don't
+            really understand why it needs to be inverted to work properly.  But it
+            does.
+             */
+            MotionEvent.ACTION_DOWN -> {
+                if (!mPttLocked && mAudioPlayer != null && mCallsign != null) {
+                    mAudioPlayer!!.startRecording()
+                }
+                mPttPressTime = System.currentTimeMillis()
+                true
+            }
             MotionEvent.ACTION_UP -> {
                 v.performClick()
-                if (mAudioPlayer != null) mAudioPlayer!!.startPlayback()
+                if (!mPttLocked && System.currentTimeMillis() - mPttPressTime < 500) {
+                    mPttLocked = true
+                    mTransmitButton!!.isChecked = false
+                } else if (mAudioPlayer != null) {
+                    mAudioPlayer!!.startPlayback()
+                    mPttLocked = false
+                    mTransmitButton!!.isChecked = true
+                } else {
+                    mPttLocked = false
+                    mTransmitButton!!.isChecked = true
+                }
+                true
             }
         }
         false
     }
 
     private val onConnectListener = View.OnClickListener {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(this@MainActivity, "Audio Permissions Denied", Toast.LENGTH_SHORT).show()
+            finish()
+        }
+
         if (mConnectButton!!.isChecked) {
             connectToBluetooth()
         } else {
@@ -500,6 +616,8 @@ class MainActivity : AppCompatActivity() {
 //                startUsbConnectActivity()
             } else if (msg.what == Codec2Player.PLAYER_LISTENING) {
                 mStatusTextView!!.setText(R.string.state_label_idle)
+                mRfLevelBar!!.progressDrawable.colorFilter = PorterDuffColorFilter(colorFromRSSILevel(0), PorterDuff.Mode.SRC_IN)
+                mRfLevelBar!!.progress = 0;
                 receiveCancelled()
             } else if (msg.what == Codec2Player.PLAYER_RECORDING) {
                 mStatusTextView!!.setText(R.string.state_label_transmit)
@@ -515,6 +633,9 @@ class MainActivity : AppCompatActivity() {
                 receivedCallsign(msg.obj as String)
             } else if (msg.what == Codec2Player.PLAYER_BERT_RECEIVED) {
                 receivedBERT(msg.arg1, msg.arg2, msg.obj as Int)
+            } else if (msg.what == Codec2Player.PLAYER_RSSI_RECEIVED) {
+                mRfLevelBar!!.progressDrawable.colorFilter = PorterDuffColorFilter(colorFromRSSILevel(msg.arg1), PorterDuff.Mode.SRC_IN)
+                mRfLevelBar!!.progress = msg.arg1;
             }
         }
     }
@@ -557,7 +678,7 @@ class MainActivity : AppCompatActivity() {
     private fun validateCallsign(callsign: String) : String {
         val result = StringBuilder()
         var size = 0
-        for (c in callsign) {
+        for (c in callsign.toUpperCase()) {
             if (c in '0'..'9') {
                 result.append(c)
                 size += 1
@@ -567,13 +688,19 @@ class MainActivity : AppCompatActivity() {
             } else if (c == '-' || c == '/' || c == '.') {
                 result.append(c)
                 size += 1
-            } else if (c in 'a'..'z') {
-                result.append(c - 64)
-                size += 1
             }
             if (size == 9) break;
         }
         return result.toString()
+    }
+
+    private fun validateCAN(canString: String) : Int {
+        canString.toInt().also { val can = it
+            if (can < 0) return 0
+            if (can > 15) return 15
+            return can
+        }
+        return 0
     }
 
     private fun getLastCallsign() : String? {
@@ -587,6 +714,34 @@ class MainActivity : AppCompatActivity() {
         val sharedPref = getPreferences(Context.MODE_PRIVATE)
         with(sharedPref.edit()) {
             putString(getString(R.string.call_sign), callsign)
+            apply()
+        }
+    }
+
+    private fun getLastCAN() : Int {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE)
+        val can = sharedPref.getInt(getString(R.string.channel_access_number), 10)
+        return can
+    }
+
+    private fun setLastCAN(can: Int) {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putInt(getString(R.string.channel_access_number), can)
+            apply()
+        }
+    }
+
+    private fun getLastSquelch() : Int {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE)
+        val sql = sharedPref.getInt(getString(R.string.squelch), 50)
+        return sql
+    }
+
+    private fun setLastSquelch(sql: Int) {
+        val sharedPref = getPreferences(Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putInt(getString(R.string.squelch), sql)
             apply()
         }
     }
@@ -687,5 +842,10 @@ class MainActivity : AppCompatActivity() {
 
         private const val CALLSIGN_NOTIFICATION_ID = 1
         private const val RUNNING_NOTIFICATION_ID = 2
+
+        private val COMMANDS = arrayOf(
+            "BROADCAST", "ECHO", "INFO", "UNLINK", "M17-M17-A", "M17-M17-C", "M17-M17-E"
+        )
+
     }
 }
