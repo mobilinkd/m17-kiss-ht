@@ -685,7 +685,7 @@ class MainActivity : AppCompatActivity() {
             } else if (c in 'A'..'Z') {
                 result.append(c)
                 size += 1
-            } else if (c == '-' || c == '/' || c == '.') {
+            } else if (c == '-' || c == '/' || c == '.' || c == ' ') {
                 result.append(c)
                 size += 1
             }
@@ -844,7 +844,7 @@ class MainActivity : AppCompatActivity() {
         private const val RUNNING_NOTIFICATION_ID = 2
 
         private val COMMANDS = arrayOf(
-            "BROADCAST", "ECHO", "INFO", "UNLINK", "M17-M17-A", "M17-M17-C", "M17-M17-E"
+            "BROADCAST", "ECHO", "INFO", "UNLINK", "M17-M17 A", "M17-M17 C", "M17-M17 E"
         )
 
     }
