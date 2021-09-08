@@ -40,7 +40,8 @@ class BluetoothLEService : Service() {
                 status: Int,
                 newState: Int
         ) {
-            if (D) Log.d(TAG, "gattCallback: status = $status, state = $newState")
+            if (D) Log.d(TAG, "gattCallback: status = $status, state = $newState, bondState = ${bluetoothDevice?.bondState}")
+
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     connectionState = STATE_CONNECTED

@@ -11,8 +11,8 @@ android {
         applicationId "com.mobilinkd.m17kissht.m17kissht"
         minSdkVersion 26
         targetSdkVersion 30
-        versionCode 16
-        versionName "1.6.0"
+        versionCode 17
+        versionName "1.6.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

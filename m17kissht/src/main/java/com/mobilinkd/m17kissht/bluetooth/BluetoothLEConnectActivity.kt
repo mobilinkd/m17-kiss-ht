@@ -21,6 +21,7 @@ import android.widget.ProgressBar
 import android.widget.Toast
 import com.mobilinkd.m17kissht.R
 import java.util.*
+import java.util.regex.Pattern
 
 class BluetoothLEConnectActivity : Activity() {
 
@@ -91,8 +92,9 @@ class BluetoothLEConnectActivity : Activity() {
     fun pairWithDevice() {
         // Connect to devices advertising KISS_TNC_SERVICE
         val deviceFilter: BluetoothLeDeviceFilter = BluetoothLeDeviceFilter.Builder()
-                .setScanFilter(ScanFilter.Builder().setServiceUuid(ParcelUuid(TNC_SERVICE_UUID)).build())
-                .build()
+            // .setScanFilter(ScanFilter.Builder().setServiceUuid(ParcelUuid(TNC_SERVICE_UUID)).build())
+            .setNamePattern(Pattern.compile(".*TNC.*|.*Mobilinkd.*"))
+            .build()
 
         if (D) Log.d(TAG, "deviceFilter construced with UUID " + TNC_SERVICE_UUID)
 

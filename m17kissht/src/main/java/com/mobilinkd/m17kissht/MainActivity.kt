@@ -31,6 +31,7 @@ import com.mobilinkd.m17kissht.usb.UsbService
 import com.ustadmobile.codec2.Codec2
 import java.io.IOException
 import java.util.*
+import java.util.Locale.ROOT
 import kotlin.concurrent.schedule
 
 class MainActivity : AppCompatActivity() {
@@ -60,7 +61,7 @@ class MainActivity : AppCompatActivity() {
     private var mCan = 10
     private var mDestination = ""
     private var mSquelch = 50
-    private var mPttPressTime = System.currentTimeMillis();
+    private var mPttPressTime = System.currentTimeMillis()
     private var mPttLocked = false
 
     private var mBluetoothDevice: BluetoothDevice? = null
@@ -178,7 +179,7 @@ class MainActivity : AppCompatActivity() {
                 BluetoothLEService.GATT_DISCONNECTED -> {
                     Log.i(TAG, "GATT disconnected")
                     mWakeLock?.release()
-                    backgroundCancelled();
+                    backgroundCancelled()
                     mWakeLock = null
                     if (mAudioPlayer != null) {
                         Toast.makeText(this@MainActivity, "Bluetooth disconnected", Toast.LENGTH_SHORT).show()
@@ -216,8 +217,8 @@ class MainActivity : AppCompatActivity() {
         mEditCan = findViewById(R.id.editChannelAccessNumber)
         mEditCan!!.setOnEditorActionListener(onChannelAccessNumberChanged)
         mRfLevelBar = findViewById(R.id.progressRfLevel)
-        mRfLevelBar!!.min = 0;
-        mRfLevelBar!!.max = 255;
+        mRfLevelBar!!.min = 0
+        mRfLevelBar!!.max = 255
         mSquelchSeekBar = findViewById(R.id.seekSquelchLevel)
         mSquelchSeekBar?.setOnSeekBarChangeListener(onSquelchLevelChanged)
         mSquelchSeekBar?.isEnabled = true
@@ -244,6 +245,13 @@ class MainActivity : AppCompatActivity() {
         mSquelchSeekBar!!.progress = mSquelch
         mSquelchTextView!!.text = mSquelch.toString()
     }
+
+    /*
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        Log.d(TAG, "onNewIntent() -> ${intent?.action}")
+    }
+    */
 
     override fun onStart() {
         Log.d(TAG, "onStart() -> " + intent.action)
@@ -321,9 +329,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun colorFromRSSILevel(level: Int): Int {
         var color = Color.LTGRAY
-        if (level > 192) color = Color.GREEN
-        else if (level > 128) color = Color.YELLOW
-        else if (level > 0) color = Color.RED
+        when {
+            level > 192 -> color = Color.GREEN
+            level > 128 -> color = Color.YELLOW
+            level > 0 -> color = Color.RED
+        }
         return color
     }
 
@@ -399,7 +409,7 @@ class MainActivity : AppCompatActivity() {
         override fun onStopTrackingTouch(seek: SeekBar?) {
             Log.d(TAG, "onStopTrackingTouch")
             if (seek != null) {
-                mSquelch = seek!!.progress
+                mSquelch = seek.progress
                 mAudioPlayer?.setSquelch(mSquelch)
                 setLastSquelch(mSquelch)
             }
@@ -428,6 +438,7 @@ class MainActivity : AppCompatActivity() {
                     mWakeLock = null
                     backgroundCancelled()
                     mUsbService?.disconnect()
+                    finish() // finish this intent.
                 }
                 UsbService.ACTION_USB_PERMISSION -> {
                     val granted = intent.extras!!.getBoolean(UsbManager.EXTRA_PERMISSION_GRANTED)
@@ -490,6 +501,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val onBtnPttTouchListener = View.OnTouchListener { v, event ->
+        var result = false
         when (event.action) {
             /*
             The iseChecked logic seems inverted from what I would expect.  I don't
@@ -501,7 +513,7 @@ class MainActivity : AppCompatActivity() {
                     mAudioPlayer!!.startRecording()
                 }
                 mPttPressTime = System.currentTimeMillis()
-                true
+                result = true
             }
             MotionEvent.ACTION_UP -> {
                 v.performClick()
@@ -516,10 +528,10 @@ class MainActivity : AppCompatActivity() {
                     mPttLocked = false
                     mTransmitButton!!.isChecked = true
                 }
-                true
+                result = true
             }
         }
-        false
+        result
     }
 
     private val onConnectListener = View.OnClickListener {
@@ -561,7 +573,7 @@ class MainActivity : AppCompatActivity() {
     private fun receivedCallsign(callsign: String) {
         mReceivingCallsign!!.text = callsign
 
-        var builder = NotificationCompat.Builder(this, M17_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, M17_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_logo)
             .setContentTitle(callsign)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -587,7 +599,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun backgroundNotification(device: String) {
 
-        var builder = NotificationCompat.Builder(this, M17_CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, M17_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_logo)
             .setContentTitle("Connected to $device")
             .setContentText("M17 is running in the background")
@@ -617,7 +629,7 @@ class MainActivity : AppCompatActivity() {
             } else if (msg.what == Codec2Player.PLAYER_LISTENING) {
                 mStatusTextView!!.setText(R.string.state_label_idle)
                 mRfLevelBar!!.progressDrawable.colorFilter = PorterDuffColorFilter(colorFromRSSILevel(0), PorterDuff.Mode.SRC_IN)
-                mRfLevelBar!!.progress = 0;
+                mRfLevelBar!!.progress = 0
                 receiveCancelled()
             } else if (msg.what == Codec2Player.PLAYER_RECORDING) {
                 mStatusTextView!!.setText(R.string.state_label_transmit)
@@ -635,13 +647,13 @@ class MainActivity : AppCompatActivity() {
                 receivedBERT(msg.arg1, msg.arg2, msg.obj as Int)
             } else if (msg.what == Codec2Player.PLAYER_RSSI_RECEIVED) {
                 mRfLevelBar!!.progressDrawable.colorFilter = PorterDuffColorFilter(colorFromRSSILevel(msg.arg1), PorterDuff.Mode.SRC_IN)
-                mRfLevelBar!!.progress = msg.arg1;
+                mRfLevelBar!!.progress = msg.arg1
             }
         }
     }
 
     private fun receivedBERT(receivedBits: Int, errorBits: Int, frameCount: Int) {
-        if (receivedBits == 0) return;
+        if (receivedBits == 0) return
         mBerBitCountTextView!!.text = getString(R.string.bert_bits, receivedBits)
         mBerErrorCountTextView!!.text = getString(R.string.bert_errors, errorBits)
         mBerFrameCountTextView!!.text = getString(R.string.bert_frames, frameCount)
@@ -652,12 +664,14 @@ class MainActivity : AppCompatActivity() {
     @Throws(IOException::class)
     private fun startPlayer(isUsb: Boolean) {
         mAudioPlayer = Codec2Player(onPlayerStateChanged, CODEC2_DEFAULT_MODE, mCallsign ?: "")
+        mAudioPlayer?.setChannelAccessNumber(mCan)
+        mAudioPlayer?.setDestination(mDestination)
         if (isUsb) {
-            mAudioPlayer!!.setUsbService(mUsbService)
+            mAudioPlayer?.setUsbService(mUsbService)
         } else {
-            mAudioPlayer!!.setBleService(mBleService!!)
+            mAudioPlayer?.setBleService(mBleService!!)
         }
-        mAudioPlayer!!.start()
+        mAudioPlayer?.start()
     }
 
     private fun getLastBleDevice() : String? {
@@ -678,7 +692,7 @@ class MainActivity : AppCompatActivity() {
     private fun validateCallsign(callsign: String) : String {
         val result = StringBuilder()
         var size = 0
-        for (c in callsign.toUpperCase()) {
+        for (c in callsign.toUpperCase(ROOT)) {
             if (c in '0'..'9') {
                 result.append(c)
                 size += 1
@@ -689,7 +703,7 @@ class MainActivity : AppCompatActivity() {
                 result.append(c)
                 size += 1
             }
-            if (size == 9) break;
+            if (size == 9) break
         }
         return result.toString()
     }
@@ -700,7 +714,6 @@ class MainActivity : AppCompatActivity() {
             if (can > 15) return 15
             return can
         }
-        return 0
     }
 
     private fun getLastCallsign() : String? {
@@ -718,10 +731,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getLastCAN() : Int {
+    private fun getLastCAN(): Int {
         val sharedPref = getPreferences(Context.MODE_PRIVATE)
-        val can = sharedPref.getInt(getString(R.string.channel_access_number), 10)
-        return can
+        return sharedPref.getInt(getString(R.string.channel_access_number), 10)
     }
 
     private fun setLastCAN(can: Int) {
@@ -732,10 +744,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getLastSquelch() : Int {
+    private fun getLastSquelch(): Int {
         val sharedPref = getPreferences(Context.MODE_PRIVATE)
-        val sql = sharedPref.getInt(getString(R.string.squelch), 50)
-        return sql
+        return sharedPref.getInt(getString(R.string.squelch), 50)
     }
 
     private fun setLastSquelch(sql: Int) {
@@ -748,7 +759,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindBleService(device: BluetoothDevice) {
         mBluetoothDevice = device
-        Log.i(TAG, "Bluetooth connect to " + mBluetoothDevice?.name)
+        Log.i(TAG, "Bluetooth connect to ${device.name}, type = ${device.type}, bonded = ${device.bondState}")
         val gattServiceIntent = Intent(this, BluetoothLEService::class.java)
         if (mBleService == null) {
             bindService(gattServiceIntent, bleConnection, BIND_AUTO_CREATE)
@@ -762,9 +773,9 @@ class MainActivity : AppCompatActivity() {
     private fun reconnectToBluetooth() {
         val address = getLastBleDevice()
         if (address != null) {
-            Log.i(TAG, "Bluetooth connecting to last device @ " + address);
+            Log.i(TAG, "Bluetooth connecting to last device @ $address")
             val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
-            val device = bluetoothManager.getAdapter().getRemoteDevice(address)
+            val device = bluetoothManager.adapter.getRemoteDevice(address)
             if (device.bondState == BluetoothDevice.BOND_BONDED) {
                 bindBleService(device)
                 return
@@ -793,7 +804,7 @@ class MainActivity : AppCompatActivity() {
         if (mUsbService == null) {
             bindService(intent, usbConnection, BIND_AUTO_CREATE)
         } else {
-            if (!mUsbService!!.attachSupportedDevice(device!!)) {
+            if (!mUsbService!!.attachSupportedDevice(device)) {
                 Toast.makeText(this@MainActivity, "USB device not supported", Toast.LENGTH_SHORT).show()
                 finish()
             }
@@ -820,11 +831,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun makeUsbIntentFilter(): IntentFilter? {
+    private fun makeUsbIntentFilter(): IntentFilter {
         val intentFilter = IntentFilter()
         intentFilter.addAction(UsbService.ACTION_USB_READY)
-        intentFilter.addAction(UsbService.ACTION_NO_USB);
-        intentFilter.addAction(UsbService.ACTION_USB_NOT_SUPPORTED);
+        intentFilter.addAction(UsbService.ACTION_NO_USB)
+        intentFilter.addAction(UsbService.ACTION_USB_NOT_SUPPORTED)
         intentFilter.addAction(UsbService.ACTION_USB_PERMISSION)
         intentFilter.addAction(UsbService.ACTION_USB_DETACHED)
         intentFilter.addAction(UsbService.ACTION_USB_ATTACHED)
@@ -834,11 +845,11 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private val TAG = MainActivity::class.java.name
         private const val REQUEST_CONNECT_BT = 1
-        private const val REQUEST_CONNECT_USB = 2
+//        private const val REQUEST_CONNECT_USB = 2
         private const val REQUEST_PERMISSIONS = 3
         private const val CODEC2_DEFAULT_MODE = Codec2.CODEC2_MODE_3200
 
-        private val M17_CHANNEL_ID = MainActivity::class.java.`package`.toString()
+        private val M17_CHANNEL_ID = MainActivity::class.java.`package`!!.toString()
 
         private const val CALLSIGN_NOTIFICATION_ID = 1
         private const val RUNNING_NOTIFICATION_ID = 2
@@ -846,6 +857,5 @@ class MainActivity : AppCompatActivity() {
         private val COMMANDS = arrayOf(
             "BROADCAST", "ECHO", "INFO", "UNLINK", "M17-M17 A", "M17-M17 C", "M17-M17 E"
         )
-
     }
 }
