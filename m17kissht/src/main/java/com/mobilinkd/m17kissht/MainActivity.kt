@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
     private var mSquelch = 50
     private var mPttPressTime = System.currentTimeMillis()
     private var mPttLocked = false
+    private var mBluetoothConnected = false
 
     private var mBluetoothDevice: BluetoothDevice? = null
     private var mUsbDevice: UsbDevice? = null
@@ -164,6 +165,7 @@ class MainActivity : AppCompatActivity() {
                     mDeviceTextView!!.text = mBluetoothDevice!!.name
                     mConnectButton?.isActivated = true
                     mConnectButton?.isEnabled = true
+                    mBluetoothConnected = true
                 }
                 BluetoothLEService.GATT_SERVICES_DISCOVERED -> {
                     Log.i(TAG, "KISS TNC Service connected")
@@ -197,7 +199,14 @@ class MainActivity : AppCompatActivity() {
                     mDeviceTextView?.text = getString(R.string.not_connected_label)
                     mTransmitButton?.isEnabled = false
                     if (mConnectButton!!.isChecked) {
-                        reconnectToBluetooth()
+                        if (mBluetoothConnected) {
+                            reconnectToBluetooth()
+                        } else {
+                            // Attempted to connect with last device and failed.
+                            mConnectButton!!.isChecked = false
+                            setLastBleDevice("NOT FOUND")
+                            pairWithDevice()
+                        }
                     }
                 }
             }
@@ -566,6 +575,7 @@ class MainActivity : AppCompatActivity() {
         if (mConnectButton!!.isChecked) {
             connectToBluetooth()
         } else {
+            mBluetoothConnected = false
             mBleService?.close()
         }
     }
