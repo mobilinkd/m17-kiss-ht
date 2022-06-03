@@ -2,11 +2,17 @@ package com.mobilinkd.m17kissht
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanResult
+import android.companion.AssociationRequest
+import android.companion.BluetoothLeDeviceFilter
+import android.companion.CompanionDeviceManager
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -32,14 +38,13 @@ import com.ustadmobile.codec2.Codec2
 import java.io.IOException
 import java.util.*
 import java.util.Locale.ROOT
+import java.util.regex.Pattern
 import kotlin.concurrent.schedule
 
 class MainActivity : AppCompatActivity() {
     private val _requiredPermissions = arrayOf(
-        Manifest.permission.BLUETOOTH,
         Manifest.permission.RECORD_AUDIO,
-        Manifest.permission.WAKE_LOCK,
-        Manifest.permission.ACCESS_FINE_LOCATION
+        Manifest.permission.WAKE_LOCK
     )
     private var mIsActive = false
     private var mDeviceTextView: TextView? = null
@@ -65,6 +70,7 @@ class MainActivity : AppCompatActivity() {
     private var mPttLocked = false
 
     private var mBluetoothDevice: BluetoothDevice? = null
+    private var mUsbDevice: UsbDevice? = null
     private var mBleService: BluetoothLEService? = null
     private var mUsbService: UsbService? = null
 
@@ -100,10 +106,11 @@ class MainActivity : AppCompatActivity() {
             mUsbService = binder.service
             mUsbService?.setHandler(usbHandler)
             mUsbService?.setMainActivity(this@MainActivity)
-            val device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE) as UsbDevice?
-            if (device != null) {
-                if (!mUsbService!!.attachSupportedDevice(device))
+            if (mUsbDevice != null) {
+                if (!mUsbService!!.attachSupportedDevice(mUsbDevice!!))
                     Toast.makeText(this@MainActivity, "USB device not supported", Toast.LENGTH_SHORT).show()
+            } else {
+                Log.e(TAG, "onServiceConnected: no device found")
             }
         }
 
@@ -258,6 +265,16 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         createNotificationChannel()
         registerReceiver(usbReceiver, makeUsbIntentFilter())
+        // Initializes Bluetooth adapter.
+        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val bluetoothAdapter = bluetoothManager.adapter
+
+        // Ensures Bluetooth is available on the device and it is enabled. If not,
+        // displays a dialog requesting user permission to enable Bluetooth.
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
+        }
     }
 
     override fun onResume() {
@@ -298,11 +315,6 @@ class MainActivity : AppCompatActivity() {
 //        val usbConnectIntent = Intent(this, UsbConnectService::class.java)
 //        startActivityForResult(usbConnectIntent, REQUEST_CONNECT_USB)
 //    }
-
-    private fun startBluetoothConnectActivity() {
-        val bluetoothConnectIntent = Intent(this, BluetoothLEConnectActivity::class.java)
-        startActivityForResult(bluetoothConnectIntent, REQUEST_CONNECT_BT)
-    }
 
     private fun requestPermissions(): Boolean {
         val permissionsToRequest: MutableList<String> = LinkedList()
@@ -422,7 +434,12 @@ class MainActivity : AppCompatActivity() {
             when(intent.action) {
                 UsbService.ACTION_USB_ATTACHED -> {
                     val device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE) as UsbDevice?
-                    if (device != null) mUsbService?.attachSupportedDevice(device)
+                    if (device != null) {
+                        if (D) Log.d(TAG, "USB attached -> " + device.productName)
+                        bindUsbService(device!!)
+                    } else {
+                        Toast.makeText(this@MainActivity, "No USB device available", Toast.LENGTH_SHORT).show()
+                    }
                 }
                 UsbService.ACTION_USB_DETACHED -> {
                     Toast.makeText(this@MainActivity, "USB detached", Toast.LENGTH_SHORT).show()
@@ -513,21 +530,23 @@ class MainActivity : AppCompatActivity() {
                     mAudioPlayer!!.startRecording()
                 }
                 mPttPressTime = System.currentTimeMillis()
+                v.isPressed = true
                 result = true
             }
             MotionEvent.ACTION_UP -> {
                 v.performClick()
                 if (!mPttLocked && System.currentTimeMillis() - mPttPressTime < 500) {
                     mPttLocked = true
-                    mTransmitButton!!.isChecked = false
+                    mTransmitButton!!.isChecked = true
                 } else if (mAudioPlayer != null) {
                     mAudioPlayer!!.startPlayback()
                     mPttLocked = false
-                    mTransmitButton!!.isChecked = true
+                    mTransmitButton!!.isChecked = false
                 } else {
                     mPttLocked = false
-                    mTransmitButton!!.isChecked = true
+                    mTransmitButton!!.isChecked = false
                 }
+                v.isPressed = false
                 result = true
             }
         }
@@ -784,24 +803,36 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun connectToBluetooth() {
-//        val address = getLastBleDevice()
-//        if (address != null) {
-//            Log.i(TAG, "Bluetooth connecting to last device @ " + address);
-//            val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
-//            val device = bluetoothManager.getAdapter().getRemoteDevice(address)
-//            if (device.bondState == BluetoothDevice.BOND_BONDED) {
-//                bindBleService(device)
-//                return
-//            }
-//        }
-        startBluetoothConnectActivity()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_DENIED)
+        {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_CONNECT),
+                    2);
+                return;
+            }
+        }
+
+        val address = getLastBleDevice()
+        if (address != null) {
+            Log.i(TAG, "Bluetooth connecting to last device @ " + address);
+            val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
+            val device = bluetoothManager.getAdapter().getRemoteDevice(address)
+            if (device.bondState == BluetoothDevice.BOND_BONDED) {
+                bindBleService(device)
+                return
+            }
+        }
+        pairWithDevice()
     }
 
     private fun bindUsbService(device: UsbDevice) {
         Log.i(TAG, "Bind to USB Service")
-        val intent = Intent(this, UsbService::class.java)
-
+        mUsbDevice = device
         if (mUsbService == null) {
+            val intent = Intent(this, UsbService::class.java)
             bindService(intent, usbConnection, BIND_AUTO_CREATE)
         } else {
             if (!mUsbService!!.attachSupportedDevice(device)) {
@@ -813,19 +844,74 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
+    private val deviceManager: CompanionDeviceManager by lazy(LazyThreadSafetyMode.NONE) {
+        getSystemService(CompanionDeviceManager::class.java)
+    }
+
+    fun pairWithDevice() {
+        // Connect to devices advertising KISS_TNC_SERVICE
+        val deviceFilter: BluetoothLeDeviceFilter = BluetoothLeDeviceFilter.Builder()
+            // .setScanFilter(ScanFilter.Builder().setServiceUuid(ParcelUuid(TNC_SERVICE_UUID)).build())
+            .setNamePattern(Pattern.compile(".*TNC.*|.*Mobilinkd.*"))
+            .build()
+
+        if (D) Log.d(TAG, "deviceFilter construced with UUID " + TNC_SERVICE_UUID)
+
+        // The argument provided in setSingleDevice() determines whether a single
+        // device name or a list of device names is presented to the user as
+        // pairing options.
+        val pairingRequest: AssociationRequest = AssociationRequest.Builder()
+            .addDeviceFilter(deviceFilter)
+            .setSingleDevice(false)
+            .build()
+
+        if (D) Log.d(TAG, "pairingRequest construced with deviceFilter")
+
+        // When the app tries to pair with the Bluetooth device, show the
+        // appropriate pairing request dialog to the user.
+        deviceManager.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
+
+            override fun onDeviceFound(chooserLauncher: IntentSender) {
+                if (D) Log.d(TAG, "device found for pairing")
+                startIntentSenderForResult(chooserLauncher,
+                    REQUEST_CONNECT_DEVICE, null, 0, 0, 0, null)
+            }
+
+            override fun onFailure(error: CharSequence?) {
+                if (D) Log.d(TAG, "pairingRequest failed: " + error)
+            }
+
+        }, null)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CONNECT_BT) {
-            if (resultCode == RESULT_CANCELED) {
-                finish()
-            } else if (resultCode == RESULT_OK) {
-                if (data == null) {
-                    Log.w(TAG, "REQUEST_CONNECT_BT: intent is null")
+        when (requestCode) {
+            REQUEST_ENABLE_BLUETOOTH -> when (resultCode) {
+                Activity.RESULT_OK -> {
+                    if (D) Log.d(TAG, "BT enabled")
                 }
-                val device = data?.getParcelableExtra("device") as BluetoothDevice?
-                if (device != null) {
-                    setLastBleDevice(device.address)
-                    bindBleService(device)
+                else -> {
+                    // User did not enable Bluetooth or an error occured
+                    if (D) Log.d(TAG, "BT not enabled")
+                    Toast.makeText(this, R.string.bt_not_enabled, Toast.LENGTH_SHORT).show()
+                }
+            }
+            REQUEST_CONNECT_DEVICE -> when (resultCode) {
+                Activity.RESULT_OK -> {
+                    if (data == null) {
+                        Log.w(TAG, "REQUEST_CONNECT_DEVICE: intent is null")
+                        return;
+                    }
+                    // User has chosen to pair with the Bluetooth device.
+                    val scanResult = data!!.getParcelableExtra<ScanResult>(CompanionDeviceManager.EXTRA_DEVICE)
+                    val device = scanResult?.device;
+                    if (device != null) {
+                        if (D) Log.d(TAG, "onActivityResult REQUEST_CONNECT_DEVICE = " + device.address)
+                        setLastBleDevice(device.address)
+                        bindBleService(device)
+                    }
                 }
             }
         }
@@ -844,6 +930,8 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private val TAG = MainActivity::class.java.name
+        private val D = true
+
         private const val REQUEST_CONNECT_BT = 1
 //        private const val REQUEST_CONNECT_USB = 2
         private const val REQUEST_PERMISSIONS = 3
@@ -857,5 +945,16 @@ class MainActivity : AppCompatActivity() {
         private val COMMANDS = arrayOf(
             "BROADCAST", "ECHO", "INFO", "UNLINK", "M17-M17 A", "M17-M17 C", "M17-M17 E"
         )
+
+        private val BT_ENABLE = 1
+        private val BT_CONNECT_SUCCESS = 2
+        private val BT_PAIRING_FAILURE = 3
+        private val BT_SOCKET_FAILURE = 4
+        private val BT_ADAPTER_FAILURE = 5
+
+        private val TNC_SERVICE_UUID = UUID.fromString("00000001-ba2a-46c9-ae49-01b0961f68bb")
+        private val REQUEST_ENABLE_BLUETOOTH = 1
+        private val REQUEST_CONNECT_DEVICE = 2
+
     }
 }

@@ -10,9 +10,10 @@ android {
     defaultConfig {
         applicationId "com.mobilinkd.m17kissht.m17kissht"
         minSdkVersion 26
+        maxSdkVersion 30
         targetSdkVersion 30
-        versionCode 17
-        versionName "1.6.1"
+        versionCode 18
+        versionName "1.7.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -51,6 +52,6 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 }
 repositories {
-    maven { url 'https://dl.bintray.com/kotlin/kotlin-eap' }
+    // maven { url 'https://dl.bintray.com/kotlin/kotlin-eap' }
     mavenCentral()
 }

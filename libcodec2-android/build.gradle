@@ -1,13 +1,9 @@
-apply plugin: 'digital.wup.android-maven-publish'
 apply plugin: 'com.android.library'
 
 buildscript {
     repositories {
-        jcenter()
-    }
-
-    dependencies {
-        classpath "digital.wup:android-maven-publish:3.6.2"
+        google()
+        mavenCentral()
     }
 }
 
@@ -110,28 +106,10 @@ task compileCodec2 {
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.android.tools.build:aapt2:4.2.2-7147631'
     implementation 'com.android.support:support-annotations:28.0.0'
-    testImplementation 'androidx.test.ext:junit:1.1.1'
-    androidTestImplementation 'com.android.support.test:runner:1.0.2'
-    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.1'
-}
-
-publishing {
-    publications {
-        mavenAar(MavenPublication) {
-            from components.android
-
-            groupId rootProject.group
-            artifactId project.name
-            version "${rootProject.version}"
-        }
-    }
-
-    repositories {
-        //Set this in projectdir/extrasettings.gradle
-        maven {
-            url rootProject.file(rootProject.ext.buildConfigProperties['repo.dir']).getAbsolutePath()
-        }
-    }
+//    testImplementation 'androidx.test.ext:junit:1.1.1'
+//    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+//    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+//    androidTestImplementation 'androidx.test.ext:junit:1.1.1'
 }

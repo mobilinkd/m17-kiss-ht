@@ -2,6 +2,6 @@
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@drawable/button_transmit" android:state_enabled="true" android:state_pressed="true" android:color="#FF8C00" />
     <item android:drawable="@drawable/button_transmit" android:state_enabled="true" android:state_checked="true" android:color="#FF8C00" />
-    <item android:drawable="@drawable/button_transmit" android:state_enabled="true" android:state_checked="false" android:color="#006400" />
+    <item android:drawable="@drawable/button_transmit" android:state_enabled="true" android:state_pressed="false" android:state_checked="false" android:color="#006400" />
     <item android:drawable="@drawable/button_transmit" android:color="#6E6E6E"/>
 </selector>
