@@ -320,11 +320,6 @@ class MainActivity : AppCompatActivity() {
         mWakeLock = null
     }
 
-//    protected fun startUsbConnectActivity() {
-//        val usbConnectIntent = Intent(this, UsbConnectService::class.java)
-//        startActivityForResult(usbConnectIntent, REQUEST_CONNECT_USB)
-//    }
-
     private fun requestPermissions(): Boolean {
         val permissionsToRequest: MutableList<String> = LinkedList()
         for (permission in _requiredPermissions) {
