@@ -102,7 +102,7 @@ class BluetoothLEService : Service() {
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                Log.d("onCharacteristicWrite", "Failed write, retrying: $status")
+                Log.w("onCharacteristicWrite", "Failed write, retrying: $status")
                 gatt!!.writeCharacteristic(characteristic)
             }
             super.onCharacteristicWrite(gatt, characteristic, status)
@@ -127,17 +127,26 @@ class BluetoothLEService : Service() {
                 return
             }
 
+            if (txCharacteristic == null) {
+                Log.e(TAG, "failed to get txCharacteristic")
+                return
+            }
+
             Log.i(TAG, "KISS TNC Service characteristics acquired")
 
+            // This enables notification from the RX characteristic.
             bluetoothGatt?.setCharacteristicNotification(rxCharacteristic, enabled)
             val descriptor = rxCharacteristic!!.getDescriptor(CONFIG_DESCRIPTOR_UUID).apply {
                 value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
             }
             bluetoothGatt?.writeDescriptor(descriptor)
-            Log.i(TAG, "KISS TNC Service RX notification enabled")
-            mHandler?.obtainMessage(GATT_SERVICES_DISCOVERED)?.sendToTarget()
+            if (D) Log.d(TAG, "KISS TNC Service RX notification enabled")
 
+            // Must use WRITE_TYPE_NO_RESPONSE to get the necessary throughput.
             txCharacteristic?.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            if (D) Log.d(TAG, "KISS TNC Service TX configured as WRITE_TYPE_NO_RESPONSE")
+
+            mHandler?.obtainMessage(GATT_SERVICES_DISCOVERED)?.sendToTarget()
         }
     }
 
@@ -151,7 +160,7 @@ class BluetoothLEService : Service() {
             }
             else -> {
                 // For all other profiles, writes the data formatted in HEX.
-                Log.d(TAG, "Unexpected characteristic: " + characteristic.uuid)
+                Log.w(TAG, "Unexpected characteristic: " + characteristic.uuid)
             }
         }
     }
@@ -160,7 +169,11 @@ class BluetoothLEService : Service() {
     {
         return if (txCharacteristic != null && bluetoothGatt!= null) {
             txCharacteristic!!.value = data
-            bluetoothGatt!!.writeCharacteristic(txCharacteristic!!)
+            val result = bluetoothGatt!!.writeCharacteristic(txCharacteristic!!)
+            if (!result) {
+                Log.w(TAG, "write failed")
+            }
+            result
         } else {
             Log.w(TAG, "write called while not connected")
             false

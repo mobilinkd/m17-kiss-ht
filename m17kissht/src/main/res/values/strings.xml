@@ -7,7 +7,9 @@
     <string name="usb_label">USB</string>
     <string name="connect_label">Connect</string>
     <string name="disconnect_label">Disconnect</string>
+    <string name="connecting_label">Connecting...</string>
     <string name="not_connected_label">Not Connected</string>
+    <string name="set_callsign_label">Set Callsign</string>
     <string name="state_label_receive">RX</string>
     <string name="state_label_transmit">TX</string>
     <string name="state_label_idle">IDLE</string>
@@ -26,6 +28,7 @@
     <string name="can_label">CAN</string>
     <string name="squelch_tooltip">Squelch level</string>
     <string name="squelch_seek_tooltip">Slide to adjust squelch level</string>
+    <string name="pairing_rejected">Pairing attempt rejected</string>
 
 
     <!-- Preference Keys -->
