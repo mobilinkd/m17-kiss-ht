@@ -20,7 +20,7 @@ class PRBS9 {
 
     fun validate(bit: Int): Int {
         assert(bit == 1 || bit == 0)
-        var result = 0;
+        var result : Int
         if (!synced) {
             result = (bit xor (state shr TAP_1) xor (state shr TAP_2)) and 1;
             state = ((state shl 1) or bit) and MASK;
@@ -52,7 +52,7 @@ class PRBS9 {
             if (hist_count >= UNLOCK_COUNT) synced = false;
         }
 
-        return return if (result == bit) 0 else 1;
+        return if (result == bit) 0 else 1;
     }
 
     fun sync(): Boolean { return synced; }
