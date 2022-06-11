@@ -142,14 +142,14 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
                             }
                             else
                             {
-                                val data = queue.poll()
-                                if (data == null) {
+                                val queue_data = queue.poll()
+                                if (queue_data == null) {
                                     Log.d("M17Callback", String.format("queue empty; cancelled."))
                                     timer!!.cancel()
                                     timer_active = false
                                 } else {
                                     try {
-                                        _kissProcessor!!.send(data)
+                                        _kissProcessor!!.send(queue_data)
                                         //                                    Log.d("M17Callback", String.format("Sent %d bytes", data.length));
                                     } catch (ex: IOException) {
                                         Log.e("M17Callback", "Exception $ex")
@@ -311,7 +311,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         Codec2.encode(_codec2Con, _recordAudioBuffer, _recordAudioEncodedBuffer)
         System.arraycopy(_recordAudioEncodedBuffer, 0, temp, _audioEncodedBufferSize, _audioEncodedBufferSize)
         val frame = ByteArray(16)
-        for (i in frame.indices) frame[i] = temp[i].toByte()
+        for (i in frame.indices) frame[i] = temp[i].code.toByte()
         if (sendLSF) _m17Processor!!.startTransmit()
         _m17Processor!!.send(frame)
     }
