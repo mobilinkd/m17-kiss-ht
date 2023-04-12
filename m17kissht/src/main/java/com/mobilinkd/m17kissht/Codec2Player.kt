@@ -1,16 +1,11 @@
 package com.mobilinkd.m17kissht
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.content.pm.PackageManager
 import android.media.*
 import android.os.Handler
 import android.os.Message
 import android.os.Process
 import android.util.Log
-import androidx.core.app.ActivityCompat
-import com.felhr.usbserial.UsbSerialDevice
-import com.felhr.usbserial.UsbSerialInterface.UsbReadCallback
 import com.mobilinkd.m17kissht.bluetooth.BluetoothLEService
 import com.mobilinkd.m17kissht.kiss.KissCallback
 import com.mobilinkd.m17kissht.kiss.KissProcessor
@@ -22,12 +17,12 @@ import java.io.IOException
 import java.nio.BufferOverflowException
 import java.nio.BufferUnderflowException
 import java.nio.ByteBuffer
-import java.time.Instant
 import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.LinkedTransferQueue
 import java.util.concurrent.TimeUnit
-import kotlin.time.TimeMark
+import kotlin.math.abs
+import kotlin.math.log10
 
 
 @SuppressLint("MissingPermission") // Handled in MainActivity.
@@ -41,15 +36,14 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     private val _audioPlayer: AudioTrack
     private var _playbackAudioBuffer: ShortArray? = null
     private val _audioRecorder: AudioRecord
-    private val _rxDataBuffer: ByteArray
     private var _recordAudioBuffer: ShortArray? = null
     private var _recordAudioEncodedBuffer: CharArray? = null
     private var _receiveQueue = LinkedBlockingQueue<ByteArray>()
     private var _prbs = PRBS9()
     private var _bertFrameCount = 0
     private var _lastBertTest = System.currentTimeMillis()
-    private var _rssi = 100;
-    private var _squelch = 100;
+    private var _rssi = 100
+    private var _squelch = 100
 
     // loopback mode
     private var _isLoopbackMode = false
@@ -96,7 +90,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
 
     fun setSquelch(sql: Int) {
         // Convert 0 to 100 squelch level to 0 to 200 as the RSSI limit.
-        _squelch = sql * 2;
+        _squelch = sql * 2
     }
 
     fun startPlayback() {
@@ -142,14 +136,14 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
                             }
                             else
                             {
-                                val queue_data = queue.poll()
-                                if (queue_data == null) {
+                                val queueData = queue.poll()
+                                if (queueData == null) {
                                     Log.d("M17Callback", String.format("queue empty; cancelled."))
                                     timer!!.cancel()
                                     timer_active = false
                                 } else {
                                     try {
-                                        _kissProcessor!!.send(queue_data)
+                                        _kissProcessor!!.send(queueData)
                                         //                                    Log.d("M17Callback", String.format("Sent %d bytes", data.length));
                                     } catch (ex: IOException) {
                                         Log.e("M17Callback", "Exception $ex")
@@ -181,7 +175,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         }
 
         override fun onReceiveRSSI(value: Int) {
-            _rssi = value;
+            _rssi = value
             _onPlayerStateChanged.obtainMessage(PLAYER_RSSI_RECEIVED, value, 0).sendToTarget()
         }
 
@@ -206,14 +200,14 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
             _lastBertTest = System.currentTimeMillis()
 
             for (i in frame.indices) {
-                var bits = frame[i].toInt() and 0xFF
-                var min_bit = if (i == 24) 3 else 0
+                val bits = frame[i].toInt() and 0xFF
+                val minBit = if (i == 24) 3 else 0
 
-                for (j in 7 downTo min_bit) {
+                for (j in 7 downTo minBit) {
                     if (bits and (1 shl j) != 0) {
-                        _prbs.validate(1);
+                        _prbs.validate(1)
                     } else {
-                        _prbs.validate(0);
+                        _prbs.validate(0)
                     }
                 }
             }
@@ -265,7 +259,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
             Codec2.decode(_codec2Con, _playbackAudioBuffer, data)
             _audioPlayer.write(_playbackAudioBuffer!!, 0, _audioBufferSize)
         } else {
-            _playbackAudioBuffer?.fill(0);
+            _playbackAudioBuffer?.fill(0)
             _audioPlayer.write(_playbackAudioBuffer!!, 0, _audioBufferSize)
         }
         notifyAudioLevel(_playbackAudioBuffer, false)
@@ -276,10 +270,10 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         if (pcmAudioSamples != null) {
             var acc = 0.0
             for (v in pcmAudioSamples) {
-                acc += Math.abs(v.toInt()).toDouble()
+                acc += abs(v.toInt()).toDouble()
             }
             val avg = acc / pcmAudioSamples.size
-            db = 20.0 * Math.log10(avg / 32768.0)
+            db = 20.0 * log10(avg / 32768.0)
         }
         val msg = Message.obtain()
         if (isTx) msg.what = PLAYER_TX_LEVEL else msg.what = PLAYER_RX_LEVEL
@@ -309,7 +303,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         System.arraycopy(_recordAudioEncodedBuffer!!, 0, temp, 0, _audioEncodedBufferSize)
         _audioRecorder.read(_recordAudioBuffer!!, 0, _audioBufferSize)
         Codec2.encode(_codec2Con, _recordAudioBuffer, _recordAudioEncodedBuffer)
-        System.arraycopy(_recordAudioEncodedBuffer, 0, temp, _audioEncodedBufferSize, _audioEncodedBufferSize)
+        _recordAudioEncodedBuffer?.let { System.arraycopy(it, 0, temp, _audioEncodedBufferSize, _audioEncodedBufferSize) }
         val frame = ByteArray(16)
         for (i in frame.indices) frame[i] = temp[i].code.toByte()
         if (sendLSF) _m17Processor!!.startTransmit()
@@ -326,7 +320,7 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
         if (_isLoopbackMode) {
             return processLoopbackPlayback()
         }
-        var receivedData = _receiveQueue.poll(RX_TIMEOUT.toLong(), TimeUnit.MILLISECONDS)
+        val receivedData = _receiveQueue.poll(RX_TIMEOUT.toLong(), TimeUnit.MILLISECONDS)
         if (receivedData != null) {
             _kissProcessor!!.receive(receivedData)
             setStatus(PLAYER_PLAYING, 0)
@@ -455,7 +449,6 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     }
 
     init {
-        _rxDataBuffer = ByteArray(RX_BUFFER_SIZE)
         _callsign = callsign
         setCodecModeInternal(codec2Mode)
         val _audioRecorderMinBufferSize = AudioRecord.getMinBufferSize(

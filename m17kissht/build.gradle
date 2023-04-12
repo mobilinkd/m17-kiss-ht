@@ -4,16 +4,15 @@ plugins {
 apply plugin: 'kotlin-android'
 
 android {
-    compileSdkVersion 31
-    buildToolsVersion "30.0.2"
+    compileSdkVersion 33
 
     defaultConfig {
         applicationId "com.mobilinkd.m17kissht.m17kissht"
         minSdkVersion 26
-        maxSdkVersion 30
-        targetSdkVersion 30
-        versionCode 19
-        versionName "1.7.1"
+        maxSdkVersion 34
+        targetSdkVersion 33
+        versionCode 20
+        versionName "1.7.2"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
