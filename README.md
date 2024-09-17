@@ -95,6 +95,80 @@ across the BLE link without significant latency/jitter.
 
 https://www.b4x.com/android/forum/threads/uart-data-comms-using-bm78-dual-mode-ble-module.68113/
 
+## BLE on Android
+
+*BLE on Android is a mess. BLE on Android with dual-mode devices is an even greater mess.*
+
+There are three main issues when using BLE on on Android.
+
+ 1. Pairing and bonding
+ 2. Sequencing operations
+ 3. Threading
+
+### Pairing and Bonding
+
+BLE on Android is supposed to bond automatically when an operation which requires authentication
+is attempted. However, with a dual-mode device (or at least the BM78), Android seems to require
+that the  device be paired first. Failing to first pair the device will result in a
+`GATT_AUTHORIZATION_ERROR` when doing GATT discovery and bonding is not attempted. If the device
+is paired first, GATT discovery proceeds successfully and a second BLE pairing attempt is made
+when a privileged operation is attempted.
+
+On the TNC3 & TNC4, the privileged operation is the request to enable notification from the
+read characteristic.
+
+Once the BLE pairing is completed, BLE operations will work as expected. But the device will
+no longer work for BR/EDR (classic mode). To use the device in BR/EDR mode, the device must be
+re-paired with Android. This presents the biggest usability issue with using dual-mode devices
+for both BR/EDR and BLE on Android.
+
+When developing the app, bear in mind that there are three potential scenarios for pairing,
+and a similar number of failure paths which must be dealt with.
+
+ 1. Device is not bonded.
+ 2. Device is bonded for BR/EDR.
+ 3. Device is bonded for BLE.
+
+Note: there is no way to tell whether a bonded device is bonded for BR/EDR or BLE.
+
+#### Device is not bonded
+
+If the device is not bonded, a call to `device.createBond()` should be made to establish the
+BR/EDR bond. The user will asked to approve pairing of the device. If that is successful, then
+the steps for *Device is bonded for BR/EDR* can be followed.
+
+Attempting to use the BLE GATT without first creating a BR/EDR bond will result in a
+`GATT_AUTHORIZATION_ERROR` during service discovery.
+
+One important distinction here is that there will be **two** sets of notifications for
+`BluetoothDevice.ACTION_BOND_STATE_CHANGED` when the device is not bonded. The GATT connection
+attempt should only be started once.
+
+#### Device is bonded for BR/EDR
+
+If the device is bonded for BR/EDR, pairing will happen automatically for BLE one the request
+to enable notifications is sent. The user will (potentially again) be presented with a pairing
+request.  If that is successful, then the steps for *Device is bonded for BLE* can be followed.
+Otherwise, the GATT will be disconnected with an error.
+
+#### Other Pairing and Bonding Issues
+
+Android may become confused and fail to ever bond to a device. There are two things which may
+fix the issue if the Android device enters this state.
+
+ 1. Restart the Bluetooth adapter by turning Bluetooth off and on.
+ 2. Restart the Android device. This has always worked to return to sane Bluetooth behavior.
+
+When Android starts reporting the undocumented GATT_ERROR (133) when attempting to enable
+notificatons, the Android device needs to be restarted.
+
+    onDescriptorWrite failed: 00000003-ba2a-46c9-ae49-01b0961f68bb, status = 133
+
+
+### Sequencing Operations
+
+In order to pair the TNC under BLE 
+
 # TODO
 - Configuration screen for USB serial parameters, callsign, etc.
 - Received callsign history.

@@ -4,9 +4,11 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/m17kissht.iml" filepath="$PROJECT_DIR$/.idea/modules/m17kissht.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.iml" filepath="$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.androidTest.iml" filepath="$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.androidTest.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.main.iml" filepath="$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.unitTest.iml" filepath="$PROJECT_DIR$/.idea/modules/libcodec2-android/m17kissht.libcodec2-android.unitTest.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.iml" filepath="$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.androidTest.iml" filepath="$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.androidTest.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.main.iml" filepath="$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.unitTest.iml" filepath="$PROJECT_DIR$/.idea/modules/m17kissht/m17kissht.m17kissht.unitTest.iml" />
     </modules>

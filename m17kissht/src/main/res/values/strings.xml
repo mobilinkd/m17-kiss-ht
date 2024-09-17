@@ -8,6 +8,7 @@
     <string name="connect_label">Connect</string>
     <string name="disconnect_label">Disconnect</string>
     <string name="connecting_label">Connecting...</string>
+    <string name="ble_denied_label">BLE Denied</string>
     <string name="not_connected_label">Not Connected</string>
     <string name="set_callsign_label">Set Callsign</string>
     <string name="state_label_receive">RX</string>

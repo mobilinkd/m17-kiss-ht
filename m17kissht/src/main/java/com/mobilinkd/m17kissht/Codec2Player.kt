@@ -121,38 +121,27 @@ class Codec2Player(private val _onPlayerStateChanged: Handler, codec2Mode: Int, 
     private val _m17Callback: M17Callback = object : M17Callback() {
         var timer: Timer? = null
         var queue = LinkedTransferQueue<ByteArray>()
-        var timer_active = false
-        var primed = false
         @Throws(IOException::class)
         override fun onSend(data: ByteArray) {
             synchronized(queue) {
-                if (!timer_active) {
-                    primed = false
+                if (timer == null) {
                     timer = Timer()
                     val task: TimerTask = object : TimerTask() {
                         override fun run() {
-                            if (!primed) {
-                                if (queue.size > 1) primed = true
-                            }
-                            else
-                            {
-                                val queueData = queue.poll()
-                                if (queueData == null) {
-                                    Log.d("M17Callback", String.format("queue empty; cancelled."))
-                                    timer!!.cancel()
-                                    timer_active = false
-                                } else {
-                                    try {
-                                        _kissProcessor!!.send(queueData)
-                                        //                                    Log.d("M17Callback", String.format("Sent %d bytes", data.length));
-                                    } catch (ex: IOException) {
-                                        Log.e("M17Callback", "Exception $ex")
-                                    }
+                            val queueData = queue.poll()
+                            if (queueData == null) {
+                                Log.d("M17Callback", String.format("queue empty; cancelled."))
+                                timer!!.cancel()
+                                timer = null
+                            } else {
+                                try {
+                                    _kissProcessor!!.send(queueData)
+                                } catch (ex: IOException) {
+                                    Log.e("M17Callback", "Exception $ex")
                                 }
                             }
                         }
                     }
-                    timer_active = true
                     timer!!.schedule(task, 200, 40)
                 }
             }

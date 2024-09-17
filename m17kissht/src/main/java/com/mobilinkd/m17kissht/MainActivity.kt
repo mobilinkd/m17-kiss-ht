@@ -9,6 +9,7 @@ import android.app.NotificationManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.companion.AssociationRequest
 import android.companion.BluetoothLeDeviceFilter
@@ -44,8 +45,22 @@ import kotlin.concurrent.schedule
 class MainActivity : AppCompatActivity() {
     private val _requiredPermissions = arrayOf(
         Manifest.permission.RECORD_AUDIO,
-        Manifest.permission.WAKE_LOCK
+        Manifest.permission.WAKE_LOCK,
     )
+
+    private val _blePermissionsOld = arrayOf(
+        Manifest.permission.BLUETOOTH,
+        Manifest.permission.BLUETOOTH_ADMIN,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+
+    private val _blePermissionsNew = arrayOf(
+        Manifest.permission.BLUETOOTH_SCAN,
+        Manifest.permission.BLUETOOTH_CONNECT,
+    )
+
+    private var mHaveRequiredPermissions = false
+    private var mHaveBlePermissions = false
     private var mIsActive = false
     private var mDeviceTextView: TextView? = null
     private var mStatusTextView: TextView? = null
@@ -84,6 +99,8 @@ class MainActivity : AppCompatActivity() {
     private var mBerFrameCountTextView: TextView? = null
     private var mBerRateTextView: TextView? = null
     private var mBerTimer: Timer? = null
+    private var mBluetoothReconnecting = false
+    private var mBluetoothRefreshed = false
 
     /** Defines callbacks for service binding, passed to bindService()  */
     private val bleConnection = object : ServiceConnection {
@@ -96,6 +113,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onServiceDisconnected(className: ComponentName) {
+            Log.i(TAG, "onServiceDisconnected: className -> " + className.className)
             mBleService = null
         }
     }
@@ -165,29 +183,27 @@ class MainActivity : AppCompatActivity() {
                 }
                 BluetoothLEService.GATT_CONNECTED -> {
                     Log.i(TAG, "GATT connected")
+                    mBluetoothRefreshed = false
+                    mBleService?.startDiscovery()
+                }
+                BluetoothLEService.GATT_READY -> {
+                    Log.i(TAG, "GATT ready")
                     mDeviceTextView!!.text = mBluetoothDevice!!.name
                     mConnectButton?.isActivated = true
                     mConnectButton?.isEnabled = true
                     mBluetoothConnected = true
-                }
-                BluetoothLEService.GATT_SERVICE_DISCOVERY_FAILED-> {
-                    // This occurs if the TNC is no longer available, either turned off or out of
-                    // range when the connection was attempted. Assume that there is another device
-                    // nearby that the user wishes to connect to.
-                    Log.w(TAG, "GATT discovery failed.")
-                    Toast.makeText(this@MainActivity, "Device not found", Toast.LENGTH_SHORT).show()
-                    resetLastBleDevice()
-                    pairWithDevice()
-                }
-                BluetoothLEService.GATT_SERVICES_DISCOVERED -> {
-                    Log.i(TAG, "KISS TNC Service connected")
+                    mBluetoothReconnecting = false
                     if (mCallsign != null) mTransmitButton!!.isEnabled = true
                     if (mWakeLock != null) {
                         Log.w(TAG, "Wake lock already set: " + mWakeLock.toString())
-                    }
-                    mWakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
-                        newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "m17kissht:BleWakelockTag").apply {
-                            acquire()
+                    } else {
+                        mWakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+                            newWakeLock(
+                                PowerManager.PARTIAL_WAKE_LOCK,
+                                "m17kissht:BleWakelockTag"
+                            ).apply {
+                                acquire()
+                            }
                         }
                     }
                     backgroundNotification(mBluetoothDevice!!.name)
@@ -197,11 +213,38 @@ class MainActivity : AppCompatActivity() {
                         e.printStackTrace()
                     }
                 }
+                BluetoothLEService.GATT_SERVICE_DISCOVERY_FAILED-> {
+                    // This occurs if the TNC is no longer available, either turned off or out of
+                    // range when the connection was attempted. Assume that there is another device
+                    // nearby that the user wishes to connect to.
+                    Log.w(TAG, "GATT discovery failed.")
+                    Toast.makeText(this@MainActivity, "KISS TNC service not found", Toast.LENGTH_SHORT).show()
+                    mBleService?.close()
+                    resetLastBleDevice()
+                    pairWithDevice()
+                }
+                BluetoothLEService.GATT_SERVICES_DISCOVERED -> {
+                    Log.i(TAG, "KISS TNC Service discovered")
+                    mBleService?.setMTU()
+                }
+                BluetoothLEService.GATT_MTU_CHANGED -> {
+                    Log.i(TAG, "MTU changed")
+                    mBleService?.updateCharacteristics()
+                }
+                BluetoothLEService.GATT_MTU_FAILED -> {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Failed to increase MTU",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    // This will never work.
+                    mBleService?.close()
+                }
                 BluetoothLEService.GATT_DISCONNECTED -> {
                     Log.i(TAG, "GATT disconnected")
                     val is_connected = mBluetoothConnected
                     val should_be_connected = mConnectButton!!.isChecked
-                    if (should_be_connected) {
+                    if (should_be_connected && mHaveBlePermissions) {
                         if (!is_connected) {
                             // Never GATT_CONNECTED, meaning the device was not found. Attempted to
                             // connect with last device and failed. Try to re-pair.
@@ -216,6 +259,15 @@ class MainActivity : AppCompatActivity() {
                             mConnectButton?.isChecked = true
                             resetLastBleDevice()
                             pairWithDevice()
+                        } else if (mBluetoothReconnecting) {
+                            // Retried a connection.
+                            disconnected()
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Bluetooth disconnected",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            mBluetoothReconnecting = false
                         } else {
                             // Got GATT_CONNECTED and then a disconnect which was not initiated by
                             // the user.
@@ -229,11 +281,23 @@ class MainActivity : AppCompatActivity() {
                             // reconnect. The other is to attempt to reconnect while the "Connect"
                             // button is pressed. This is good if you go in and out of range of
                             // the TNC frequently. But it can be a poor user experience if there
-                            // are odd connection problems.
+                            // are odd connection problems. We retry once.
+                            mBluetoothReconnecting = true
+                            Log.i(TAG, "Reconnecting")
+                            reconnecting()
+                            connectToBluetooth()
                         }
                     } else {
                         disconnected()
                     }
+                }
+                BluetoothLEService.GATT_SERVICE_NOT_FOUND -> {
+                    Log.w(TAG, "TNC Service not found")
+                    if (!mBluetoothRefreshed) {
+                        mBleService?.refresh()
+                        mBleService?.startDiscovery()
+                    }
+
                 }
             }
         }
@@ -303,23 +367,14 @@ class MainActivity : AppCompatActivity() {
         createNotificationChannel()
         registerReceiver(usbReceiver, makeUsbIntentFilter())
         registerReceiver(bleReceiver, makeBleIntentFilter())
-        // Initializes Bluetooth adapter.
-        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        val bluetoothAdapter = bluetoothManager.adapter
-
-        // Ensures Bluetooth is available on the device and it is enabled. If not,
-        // displays a dialog requesting user permission to enable Bluetooth.
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
-            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
-        }
+        requestRequiredPermissions()
+        requestBlePermissions()
     }
 
+    @SuppressLint("MissingPermission")
     override fun onResume() {
         super.onResume()
         Log.d(TAG, "onResume() -> " + intent.action)
-
-        requestPermissions()
 
         if (intent.action == UsbService.ACTION_USB_ATTACHED) {
             mUsbDevice = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE) as UsbDevice?
@@ -350,11 +405,12 @@ class MainActivity : AppCompatActivity() {
         if (mAudioPlayer != null) {
             mAudioPlayer!!.stopRunning()
         }
+        mBleService?.close()
         mWakeLock?.release()
         mWakeLock = null
     }
 
-    private fun requestPermissions(): Boolean {
+    private fun requestRequiredPermissions(): Boolean {
         val permissionsToRequest: MutableList<String> = LinkedList()
         for (permission in _requiredPermissions) {
             if (ContextCompat.checkSelfPermission(this@MainActivity, permission) == PackageManager.PERMISSION_DENIED) {
@@ -365,9 +421,33 @@ class MainActivity : AppCompatActivity() {
             ActivityCompat.requestPermissions(
                     this@MainActivity,
                     permissionsToRequest.toTypedArray(),
-                    REQUEST_PERMISSIONS)
+                    REQUEST_REQUIRED_PERMISSIONS)
             return false
         }
+        if (D) Log.d(TAG, "Have required permissions")
+        mHaveRequiredPermissions = true
+        return true
+    }
+
+    private fun requestBlePermissions(): Boolean {
+        val permissionsToRequest: MutableList<String> = LinkedList()
+        val blePermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)  _blePermissionsNew else  _blePermissionsOld
+
+        for (permission in blePermissions) {
+            if (ContextCompat.checkSelfPermission(this@MainActivity, permission ) == PackageManager.PERMISSION_DENIED) {
+                permissionsToRequest.add(permission)
+            }
+        }
+
+        if (permissionsToRequest.size > 0) {
+            ActivityCompat.requestPermissions(
+                this@MainActivity,
+                permissionsToRequest.toTypedArray(),
+                REQUEST_BLE_PERMISSIONS)
+            return false
+        }
+        if (D) Log.d(TAG, "Have BLE permissions")
+        mHaveBlePermissions = true
         return true
     }
 
@@ -390,18 +470,16 @@ class MainActivity : AppCompatActivity() {
     private fun createNotificationChannel() {
         // Create the NotificationChannel, but only on API 26+ because
         // the NotificationChannel class is new and not in the support library
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = getString(R.string.channel_name)
-            val descriptionText = getString(R.string.channel_description)
-            val importance = NotificationManager.IMPORTANCE_DEFAULT
-            val channel = NotificationChannel(M17_CHANNEL_ID, name, importance).apply {
-                description = descriptionText
-            }
-            // Register the channel with the system
-            val notificationManager: NotificationManager =
-                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
+        val name = getString(R.string.channel_name)
+        val descriptionText = getString(R.string.channel_description)
+        val importance = NotificationManager.IMPORTANCE_DEFAULT
+        val channel = NotificationChannel(M17_CHANNEL_ID, name, importance).apply {
+            description = descriptionText
         }
+        // Register the channel with the system
+        val notificationManager: NotificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.createNotificationChannel(channel)
     }
 
     private val onCallsignChanged = TextView.OnEditorActionListener { textView, actionId, keyEvent ->
@@ -598,13 +676,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val onConnectListener = View.OnClickListener {
-        if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!mHaveRequiredPermissions) {
             Toast.makeText(this@MainActivity, "Audio Permissions Denied", Toast.LENGTH_SHORT).show()
             finish()
+        }
+
+        if (requestBlePermissions()) {
+            if (!mBluetoothConnected) {
+                // Initializes Bluetooth adapter.
+                val bluetoothManager =
+                    getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+                val bluetoothAdapter = bluetoothManager.adapter
+
+                // Ensures Bluetooth is available on the device and it is enabled. If not,
+                // displays a dialog requesting user permission to enable Bluetooth.
+                if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+                    val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                    startActivityForResult(enableBtIntent, REQUEST_ENABLE_BLUETOOTH)
+                }
+            }
         }
 
         if (mConnectButton!!.isChecked) {
@@ -618,21 +708,43 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Do the grant results indicate that all needed permissions have been granted?
+     */
+    private fun isAllGranted(grantResults: IntArray): Boolean {
+        for (result in grantResults) {
+            if (result != PackageManager.PERMISSION_GRANTED) {
+                return false
+            }
+        }
+        return true
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_PERMISSIONS) {
-            var allGranted = true
-            for (result in grantResults) {
-                if (result != PackageManager.PERMISSION_GRANTED) {
-                    allGranted = false
-                    break
+        when (requestCode) {
+            REQUEST_REQUIRED_PERMISSIONS -> {
+                if (isAllGranted(grantResults)) {
+                    if (D) Log.d(TAG, "Have required permissions")
+                    mHaveRequiredPermissions = true
+                } else {
+                    permissions.zip(grantResults.toTypedArray()).forEach {
+                        if (it.component2() != PackageManager.PERMISSION_GRANTED) {
+                            Log.e(TAG, "Missing ${it.component1()} permission")
+                        }
+                    }
+                    Toast.makeText(this@MainActivity, "Required Permissions Denied", Toast.LENGTH_LONG).show()
+                    mHaveRequiredPermissions = false
                 }
             }
-            if (allGranted) {
-                Toast.makeText(this@MainActivity, "Permissions Granted", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this@MainActivity, "Permissions Denied", Toast.LENGTH_SHORT).show()
-                finish()
+            REQUEST_BLE_PERMISSIONS -> {
+                if (isAllGranted(grantResults)) {
+                    if (D) Log.d(TAG, "Have BLE permissions")
+                    mHaveBlePermissions = true
+                } else {
+                    Toast.makeText(this@MainActivity, "Bluetooth Permissions Denied", Toast.LENGTH_LONG).show()
+                    mHaveRequiredPermissions = false
+                }
             }
         }
     }
@@ -690,8 +802,8 @@ class MainActivity : AppCompatActivity() {
     private fun guiDisconnected() {
         mTransmitButton?.isEnabled = false
         mConnectButton?.isActivated = false
-        mConnectButton?.text = getString(R.string.connect_label)
-        mConnectButton?.isEnabled = true
+        mConnectButton?.text = if (mHaveBlePermissions) getString(R.string.connect_label) else getString(R.string.ble_denied_label)
+        mConnectButton?.isEnabled = mHaveBlePermissions
         mConnectButton?.isChecked = false
         mDeviceTextView?.text = getString(R.string.not_connected_label)
     }
@@ -889,80 +1001,48 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindBleService(device: BluetoothDevice) {
         mBluetoothDevice = device
-        Log.i(TAG, "Bluetooth connect to ${device.name}, type = ${device.type}, bonded = ${device.bondState}")
         if (mBleService == null) {
+            Log.i(TAG, "Binding BleService to ${device.name}, type = ${device.type}, bonded = ${device.bondState}")
             val gattServiceIntent = Intent(this, BluetoothLEService::class.java)
             bindService(gattServiceIntent, bleConnection, BIND_AUTO_CREATE)
         } else {
-            Log.i(TAG, "Re-initializing bound service")
+            Log.i(TAG, "Re-initializing BleService with ${device.name}, type = ${device.type}, bonded = ${device.bondState}")
             mBleService?.initialize(mBluetoothDevice!!, bleHandler)
         }
         mConnectButton?.isEnabled = false
-    }
-
-    private fun reconnectToBluetooth() {
-        val address = getLastBleDevice()
-        if (address != null) {
-            Log.i(TAG, "Bluetooth connecting to last device @ $address")
-            val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
-            val device = bluetoothManager.adapter.getRemoteDevice(address)
-            Log.i(TAG, "Bluetooth connect to: ${device.name}, type = ${device.type}, bonded = ${device.bondState}")
-            if (device.bondState == BluetoothDevice.BOND_BONDED) {
-                Log.i(TAG,"Device type is ${device.type}")
-                bindBleService(device)
-                return
-            } else {
-                Log.i(TAG, "Bluetooth not bonded: ${device.name}, type = ${device.type}, bonded = ${device.bondState}")
-            }
-        }
+        setLastBleDevice(device.address)
     }
 
     private fun connectToBluetooth() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_DENIED)
-        {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_CONNECT),
-                    2);
-                return;
-            }
-        }
 
         val address = getLastBleDevice()
         if (address != null) {
             Log.i(TAG, "Bluetooth connecting to last device @ " + address);
             val bluetoothManager: BluetoothManager = getSystemService(BLUETOOTH_SERVICE) as BluetoothManager
             val device = bluetoothManager.getAdapter().getRemoteDevice(address)
+            Log.i(TAG, "Bluetooth connect to: ${device.name}, type = ${device.type}, bonded = ${device.bondState}")
             if (device.bondState == BluetoothDevice.BOND_BONDED) {
                 // The device will have no UUIDs associated with it if last bonded via BLE.  If it
                 // has any UUIDs associated with it then it was bonded via BR/EDR and will need to
                 // be re-bonded via BLE to work properly.
-                if (device.uuids == null) {
-                    // Bind to the last used BLE device. Most users only have one device. So this
-                    // makes sense. In the future and option should exist to bind to another device.
-                    Log.i(TAG, "Device is bonded via BLE")
-                    bindBleService(device)
-                } else {
-                    // This will unpair and force a re-pair. For this to work, mBluetoothDevice
-                    // needs to be set. The ACTION_BOND_STATE_CHANGED broadcast message is detected
-                    // and if it it moves to BOND_NONE while mBluetoothDevice is set, it will
-                    // automatically re-bond to the device. Once bonded, it calls bindBleService().
-                    // This typically takes a couple of seconds but may take longer.
-                    Log.w(TAG, "Device is bonded via SPP")
-                    mBluetoothDevice = device
-                    try {
-                        val removeBond = mBluetoothDevice!!.javaClass.getMethod("removeBond")
-                        removeBond.invoke(mBluetoothDevice!!)
-                    } catch (e:Exception) {
-                        if (e.message != null) Log.e(TAG, e.message!!)
+                if (device.uuids != null) {
+                    device.uuids.forEach {
+                        if (D) Log.d(TAG, "Bonded with UUID ${it.uuid}")
                     }
                 }
+                bindBleService(device)
                 return
+            } else {
+                Log.e(TAG, "${device.name} (${device.address}) is no longer bonded")
+                resetLastBleDevice()
             }
         }
         pairWithDevice()
+    }
+
+    private fun removeBond(device: BluetoothDevice) {
+        val removeBond = device.javaClass.getMethod("removeBond")
+        removeBond.invoke(device)
     }
 
     private fun bindUsbService(device: UsbDevice) {
@@ -989,8 +1069,8 @@ class MainActivity : AppCompatActivity() {
     fun pairWithDevice() {
         // Connect to devices advertising KISS_TNC_SERVICE
         val deviceFilter: BluetoothLeDeviceFilter = BluetoothLeDeviceFilter.Builder()
-            // .setScanFilter(ScanFilter.Builder().setServiceUuid(ParcelUuid(TNC_SERVICE_UUID)).build())
-            .setNamePattern(Pattern.compile(".*TNC.*|.*Mobilinkd.*"))
+            .setScanFilter(ScanFilter.Builder().setServiceUuid(ParcelUuid(TNC_SERVICE_UUID)).build())
+//            .setNamePattern(Pattern.compile(".*TNC.*|.*Mobilinkd.*"))
             .build()
 
         if (D) Log.d(TAG, "deviceFilter construced with UUID " + TNC_SERVICE_UUID)
@@ -1046,9 +1126,34 @@ class MainActivity : AppCompatActivity() {
                     val scanResult = data.getParcelableExtra<ScanResult>(CompanionDeviceManager.EXTRA_DEVICE)
                     val device = scanResult?.device;
                     if (device != null) {
-                        if (D) Log.d(TAG, "onActivityResult REQUEST_CONNECT_DEVICE = " + device.address)
-                        setLastBleDevice(device.address)
-                        bindBleService(device)
+                        if (D) Log.d(TAG, "onActivityResult REQUEST_CONNECT_DEVICE = ${device.address}, bondState = ${device.bondState}")
+                        if (mBleService?.isConnected() == true) {
+                            if (D) Log.d(TAG, "Already connected")
+                        } else {
+                            when (device.bondState) {
+                                BluetoothDevice.BOND_NONE -> {
+//                                    bindBleService(device)
+                                    mBluetoothDevice = device
+                                    device.createBond()
+                                }
+                                BluetoothDevice.BOND_BONDING -> {
+                                    removeBond(device)
+                                    connectToBluetooth()
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Bad BLE state -- need device restart?",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                                BluetoothDevice.BOND_BONDED -> {
+                                    if (mBleService?.isConnected() == true) {
+                                        Log.e(TAG, "Already connected to ${device.name}")
+                                    } else {
+                                        bindBleService(device)
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         if (D) Log.d(TAG, "onActivityResult Pairing rejected")
                         Toast.makeText(this@MainActivity, R.string.pairing_rejected, Toast.LENGTH_LONG).show()
@@ -1082,7 +1187,6 @@ class MainActivity : AppCompatActivity() {
             when(intent.action) {
                 BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
                     val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE) as BluetoothDevice?
-
                     val newState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, -1)
                     val prevState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, -1)
                     if (device != null) {
@@ -1090,21 +1194,32 @@ class MainActivity : AppCompatActivity() {
                         if (device.address == mBluetoothDevice?.address) {
                             when(newState) {
                                 BluetoothDevice.BOND_BONDED -> {
-                                    if (D) Log.d(TAG, "Bonded to ${device.name}")
-                                    bindBleService(device)
+                                    if (mBleService?.isConnected() == true) {
+                                        Log.i(TAG, "Already connected")
+                                    } else {
+                                        bindBleService(device)
+                                    }
+                                }
+                                BluetoothDevice.BOND_BONDING -> {
+                                    if (D) Log.d(TAG, "Bonding to ${device.name}")
                                 }
                                 BluetoothDevice.BOND_NONE -> {
-                                    if (prevState == BluetoothDevice.BOND_BONDING) {
-                                        // User pressed cancel to bonding request.
-                                        if (D) Log.d(TAG, "User denied bonding request to ${device.name}")
-                                        Toast.makeText(this@MainActivity, R.string.pairing_rejected, Toast.LENGTH_SHORT).show()
-                                        resetLastBleDevice()
-                                        disconnected()
-                                    } else {
-                                        // Explicitly unbonded device. This should only occur when
-                                        // we need to re-bond the device via BLE.
-                                        if (D) Log.d(TAG, "Explicitly unbonded ${device.name}")
-                                        device.createBond()
+                                    when (prevState) {
+                                        BluetoothDevice.BOND_BONDING -> {
+                                            // User pressed cancel to bonding request.
+                                            if (D) Log.d(TAG, "User denied bonding request to ${device.name}")
+                                            Toast.makeText(this@MainActivity, R.string.pairing_rejected, Toast.LENGTH_SHORT).show()
+                                            mBluetoothDevice = null
+                                            mBleService?.close()
+                                            resetLastBleDevice()
+                                            disconnected()
+                                        }
+                                        BluetoothDevice.BOND_BONDED -> {
+                                            // Explicitly unbonded device. This should only occur when
+                                            // we need to re-bond the device via BLE.
+                                            if (D) Log.d(TAG, "Explicitly unbonded ${device.name}")
+                                            device.createBond()
+                                        }
                                     }
                                 }
                             }
@@ -1120,9 +1235,9 @@ class MainActivity : AppCompatActivity() {
         private val TAG = MainActivity::class.java.name
         private val D = true
 
-        private const val REQUEST_CONNECT_BT = 1
-//        private const val REQUEST_CONNECT_USB = 2
-        private const val REQUEST_PERMISSIONS = 3
+        private const val REQUEST_REQUIRED_PERMISSIONS = 1
+        private const val REQUEST_BLE_PERMISSIONS = 1
+
         private const val CODEC2_DEFAULT_MODE = Codec2.CODEC2_MODE_3200
 
         private val M17_CHANNEL_ID = MainActivity::class.java.`package`!!.toString()
